@@ -1,3 +1,24 @@
+/* 
+ * razer_chroma_drivers - a driver/tools collection for razer chroma devices
+ * (c) 2015 by Tim Theede aka Pez2001 <pez2001@voyagerproject.de> / vp
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA
+ *
+ * THIS SOFTWARE IS SUPPLIED AS IT IS WITHOUT ANY WARRANTY!
+ *
+ */
 #ifndef _RAZER_CHROMA_H_
 #define _RAZER_CHROMA_H_
 
@@ -29,10 +50,20 @@
 
 #define PI 3.1415926535897932384626433832795
 
+//TODO move to common.h
 #define RAZER_VENDOR_ID 0x1532
 #define RAZER_BLACKWIDOW_CHROMA_PRODUCT_ID 0x203
 #define RAZER_BLACKWIDOW_CHROMA_TE_PRODUCT_ID 0x209
+#define RAZER_BLACKWIDOW_OLD_PRODUCT_ID 0x011B
+#define RAZER_BLACKWIDOW_ULTIMATE_2012_PRODUCT_ID 0x010D
+#define RAZER_BLACKWIDOW_ULTIMATE_2013_PRODUCT_ID 0x011A
+#define RAZER_BLACKWIDOW_ULTIMATE_2016_PRODUCT_ID 0x0214
+#define RAZER_BLACKWIDOW_X_CHROMA_PRODUCT_ID 0x0216
 #define RAZER_FIREFLY_PRODUCT_ID 0x0c00
+#define RAZER_MAMBA_CHROMA_PRODUCT_ID 0x0045
+#define RAZER_MAMBA_CHROMA_TE_PRODUCT_ID 0x0046
+#define RAZER_STEALTH_PRODUCT_ID 0x0205
+
 
 #define RAZER_ROW_LENGTH 22
 #define RAZER_ROWS_NUM 6
@@ -81,27 +112,37 @@ struct razer_hsl
 struct razer_rgb_row
 {
 	unsigned char row_index;
-	struct razer_rgb column[RAZER_ROW_LENGTH];
+	struct razer_rgb *column;
+	unsigned char columns_num;
+	//struct razer_rgb column[RAZER_ROW_LENGTH];
 };
 
 struct razer_rgb_frame
 {
-	struct razer_rgb_row rows[RAZER_ROWS_NUM];
+	//struct razer_rgb_row rows[RAZER_ROWS_NUM];
+	unsigned char columns_num;
+	unsigned char rows_num;
+	struct razer_rgb_row **rows;
 	int update_mask;
 };
 
-struct razer_keys
+/*struct razer_leds
 {
-	struct razer_rgb_row rows[RAZER_ROWS_NUM];
+	//struct razer_rgb_row rows[RAZER_ROWS_NUM];
+	unsigned char rows_num;
+	struct razer_rgb_row **rows;
 	int update_mask;
-	long heatmap[RAZER_ROWS_NUM][RAZER_ROW_LENGTH];
-	int lockmap[RAZER_ROWS_NUM][RAZER_ROW_LENGTH];//sets to effect id if locked by effect
-	int pushedmap[RAZER_ROWS_NUM][RAZER_ROW_LENGTH];//all keys pressed will be set 1 (needs razer_update calls to work)
+	//long heatmap[RAZER_ROWS_NUM][RAZER_ROW_LENGTH];
+	//int lockmap[RAZER_ROWS_NUM][RAZER_ROW_LENGTH];//sets to effect id if locked by effect
+	//int pushedmap[RAZER_ROWS_NUM][RAZER_ROW_LENGTH];//all keys pressed will be set 1 (needs razer_update calls to work)
 };
+*/
 
-struct razer_keys_locks
+struct razer_led_locks
 {
-	int lockmap[RAZER_ROWS_NUM][RAZER_ROW_LENGTH];
+	int columns_num;
+	int rows_num;
+	int *lockmap;
 };
 
 struct razer_keys_set
@@ -113,29 +154,91 @@ struct razer_keys_set
 
 struct razer_chroma;
 struct razer_chroma_event;
-//typedef int (*razer_input_handler)(struct razer_chroma *chroma,int keycode,int pressed);
-typedef int (*razer_input_handler)(struct razer_chroma *chroma,struct razer_chroma_event *event);
+typedef int (*razer_event_handler)(struct razer_chroma *chroma,struct razer_chroma_event *event);
+
+#define RAZER_CHROMA_DEVICE_TYPE_KEYBOARD 1
+#define RAZER_CHROMA_DEVICE_TYPE_MOUSE 2
+#define RAZER_CHROMA_DEVICE_TYPE_MOUSEMAT 3
+#define RAZER_CHROMA_DEVICE_TYPE_MISC 4
+
+struct razer_chroma_device 
+{
+	struct razer_chroma *chroma;
+	char *path;
+	char *name;
+	int type;
+	int rows_num;
+	int columns_num;
+	//TODO keyboard dimensions,number of leds,etc
+	struct razer_rgb_frame *leds;//TODO rewrite with leds as basis for all devices
+	struct razer_led_locks *locks;
+
+	//driver io files
+	char *update_leds_filename;
+	FILE *update_leds_file;
+	char *custom_mode_filename;
+	FILE *custom_mode_file;
+	char *breath_mode_filename;
+	FILE *breath_mode_file;
+	char *game_mode_filename;
+	FILE *game_mode_file;
+	char *none_mode_filename;
+	FILE *none_mode_file;
+	char *reactive_mode_filename;
+	FILE *reactive_mode_file;
+	char *spectrum_mode_filename;
+	FILE *spectrum_mode_file;
+	char *starlight_mode_filename;
+	FILE *starlight_mode_file;
+	char *static_mode_filename;
+	FILE *static_mode_file;
+	char *wave_mode_filename;
+	FILE *wave_mode_file;
+	char *brightness_filename;
+	FILE *brightness_file;
+	char *temp_clear_row_filename;
+	FILE *temp_clear_row_file;
+	char *reset_filename;
+	FILE *reset_file;
+	char *macro_keys_filename;
+	FILE *macro_keys_file;
+	char *serial_filename;
+	FILE *serial_file;
+	void *tag;
+};
+
+#define RAZER_CHROMA_INPUT_DEVICE_TYPE_KEYBOARD 1
+#define RAZER_CHROMA_INPUT_DEVICE_TYPE_MOUSE 2
+
+struct razer_chroma_input_device 
+{
+	struct razer_chroma *chroma;
+	char *path;/*path to event file*/
+	char *name;
+	int type;
+	//int use_device;
+	int input_file;
+	unsigned long last_event_ms;
+	float event_dt;
+};
+
+
+
 
 struct razer_chroma
 {
 
-	char *sys_keyboard_event_path;//default = "/dev/input/by-id/usb-Razer_Razer_BlackWidow_Chroma-event-kbd";
-	char *sys_mouse_event_path;//default = "/dev/input/event26";
+	//char *sys_keyboard_event_path;//default = "/dev/input/by-id/usb-Razer_Razer_BlackWidow_Chroma-event-kbd";
+	//char *sys_mouse_event_path;//default = "/dev/input/event26";
 
-	char *device_path;
-	char *update_keys_filename;
-	char *custom_mode_filename;
-	FILE *custom_mode_file;
-	FILE *update_keys_file;
-	int keyboard_input_file;
-	int mouse_input_file;
+	list *devices;//struct razer_chroma_device
+	struct razer_chroma_device *active_device;
+	list *input_devices;//struct razer_chroma_input_device
+
 	unsigned long last_update_ms;
 	unsigned long update_ms;
-	unsigned long last_key_event_ms;
 	float update_dt;
-	float key_event_dt;
-	struct razer_keys *keys;
-	razer_input_handler input_handler;
+	razer_event_handler event_handler;
 	struct razer_pos last_key_pos;//TODO move to sub struct pointer to pointers
 	struct razer_pos key_pos;//or remove
 	void *tag;
@@ -149,6 +252,11 @@ struct razer_chroma
 #define RAZER_CHROMA_EVENT_TYPE_SYSTEM 5
 #define RAZER_CHROMA_EVENT_TYPE_FX 6
 
+
+#define RAZER_CHROMA_EVENT_SUBTYPE_SYSTEM_DEVICE_ADD 1
+#define RAZER_CHROMA_EVENT_SUBTYPE_SYSTEM_DEVICE_REMOVE 2
+#define RAZER_CHROMA_EVENT_SUBTYPE_SYSTEM_INIT 3
+#define RAZER_CHROMA_EVENT_SUBTYPE_SYSTEM_QUIT 4
 
 #define RAZER_CHROMA_EVENT_SUBTYPE_MOUSE_X_AXIS_MOVEMENT 1
 #define RAZER_CHROMA_EVENT_SUBTYPE_MOUSE_Y_AXIS_MOVEMENT 2
@@ -203,28 +311,83 @@ struct razer_chroma_event
 
 
 
-
-struct razer_chroma *razer_open(void);
+//handler can be NULL
+struct razer_chroma *razer_open(razer_event_handler event_handler,void *tag);
 void razer_close(struct razer_chroma *chroma);
+long razer_get_num_devices(struct razer_chroma *chroma);
+void razer_set_active_device_id(struct razer_chroma *chroma,int index);
+void razer_set_active_device(struct razer_chroma *chroma,struct razer_chroma_device *device);//easiest way so i dont have to rewrite everything in one shot
+
+void razer_close_device(struct razer_chroma_device *device);
+void razer_close_devices(struct razer_chroma *chroma);
+
+void razer_fire_event(struct razer_chroma *chroma,struct razer_chroma_event *event);
+
+
+int razer_device_enable_macro_keys(struct razer_chroma_device *device);
+int razer_enable_macro_keys(struct razer_chroma *chroma);
+int razer_device_set_custom_mode(struct razer_chroma_device *device);
+int razer_set_custom_mode(struct razer_chroma *chroma);
+int razer_device_set_breath_mode(struct razer_chroma_device *device,struct razer_rgb *first_color,struct razer_rgb *second_color);
+int razer_set_breath_mode(struct razer_chroma *chroma,struct razer_rgb *first_color,struct razer_rgb *second_color);
+int razer_device_set_one_color_breath_mode(struct razer_chroma_device *device,struct razer_rgb *first_color);
+int razer_set_one_color_breath_mode(struct razer_chroma *chroma,struct razer_rgb *first_color);
+int razer_device_set_random_breath_mode(struct razer_chroma_device *device);
+int razer_set_random_breath_mode(struct razer_chroma *chroma);
+int razer_device_set_game_mode(struct razer_chroma_device *device,unsigned char enable);
+int razer_set_game_mode(struct razer_chroma *chroma,unsigned char enable);
+int razer_device_set_none_mode(struct razer_chroma_device *device);
+int razer_set_none_mode(struct razer_chroma *chroma);
+int razer_device_set_reactive_mode(struct razer_chroma_device *device,unsigned char speed,struct razer_rgb *color);
+int razer_set_reactive_mode(struct razer_chroma *chroma,unsigned char speed,struct razer_rgb *color);
+int razer_device_set_spectrum_mode(struct razer_chroma_device *device);
+int razer_set_spectrum_mode(struct razer_chroma *chroma);
+int razer_device_set_starlight_mode(struct razer_chroma_device *device);
+int razer_set_starlight_mode(struct razer_chroma *chroma);
+int razer_device_set_static_mode(struct razer_chroma_device *device,struct razer_rgb *color);
+int razer_set_static_mode(struct razer_chroma *chroma,struct razer_rgb *color);
+int razer_device_set_wave_mode(struct razer_chroma_device *device,unsigned char direction);
+int razer_set_wave_mode(struct razer_chroma *chroma,unsigned char direction);
+int razer_device_reset(struct razer_chroma_device *device);
+int razer_reset_mode(struct razer_chroma *chroma);
+int razer_device_set_brightness(struct razer_chroma_device *device,unsigned char brightness);
+int razer_set_brightness(struct razer_chroma *chroma,unsigned char brightness);
+int razer_device_temp_clear_row(struct razer_chroma_device *device);
+int razer_temp_clear_row(struct razer_chroma *chroma);
+int razer_device_set_key_row(struct razer_chroma_device *device,unsigned char row_index,unsigned char num_colors,struct razer_rgb **colors);
+int razer_set_key_row(struct razer_chroma *chroma,unsigned char row_index,unsigned char num_colors,struct razer_rgb **colors);
+int razer_device_set_key_row_buffered(struct razer_chroma_device *device,unsigned char *buffer,int buffer_len);
+int razer_set_key_row_buffered(struct razer_chroma *chroma,unsigned char *buffer,int buffer_len);
+int razer_get_serial(struct razer_chroma *chroma, char* buffer);
+int razer_device_get_serial(struct razer_chroma_device *device, char* buffer);
+int razer_get_name(struct razer_chroma *chroma, char* buffer);
+int razer_device_get_name(struct razer_chroma_device *device, char* buffer);
+
+
+
+int razer_set_led_row_buffered(struct razer_chroma *chroma,unsigned char *buffer,int buffer_len);
+
+
 void razer_update(struct razer_chroma *chroma);
-void razer_set_input_handler(struct razer_chroma *chroma,razer_input_handler handler);
+void razer_set_event_handler(struct razer_chroma *chroma,razer_event_handler handler);
 unsigned long razer_get_ticks();
 void razer_frame_limiter(struct razer_chroma *chroma,int fps);
 
-struct razer_rgb_frame *razer_create_rgb_frame(void);
+struct razer_rgb_frame *razer_create_rgb_frame(int columns_num,int rows_num);
 void razer_free_rgb_frame(struct razer_rgb_frame *frame);
 
 
-void razer_set_custom_mode(struct razer_chroma *chroma);
-void razer_update_keys(struct razer_chroma *chroma,struct razer_keys *keys);
-void razer_update_frame(struct razer_chroma *chroma,struct razer_rgb_frame *frame);
+int razer_set_custom_mode(struct razer_chroma *chroma);
+//int razer_update_keys(struct razer_chroma *chroma,struct razer_keys *keys);
+int razer_device_update_leds(struct razer_chroma_device *device, struct razer_rgb_frame *frame);
+int razer_update_leds(struct razer_chroma *chroma,struct razer_rgb_frame *frame);
 void razer_clear_frame(struct razer_rgb_frame *frame);
-char *razer_get_device_path();
+//char *razer_get_device_path();
 
 
 void razer_copy_rows(struct razer_rgb_row *src_rows,struct razer_rgb_row *dst_rows,int update_mask,int use_update_mask);
 void razer_init_frame(struct razer_rgb_frame *frame);
-void razer_init_keys(struct razer_keys *keys);
+//void razer_init_keys(struct razer_keys *keys);
 
 
 void razer_set_frame_column(struct razer_rgb_frame *frame,int column_index,struct razer_rgb *color);
@@ -233,9 +396,19 @@ void razer_sub_frame_column(struct razer_rgb_frame *frame,int column_index,struc
 void razer_mix_frame_column(struct razer_rgb_frame *frame,int column_index,struct razer_rgb *color,float opacity);
 void razer_mix_frames(struct razer_rgb_frame *dst_frame,struct razer_rgb_frame *src_frame,float opacity);
 
+void razer_set_frame_row(struct razer_rgb_frame *frame,int row_index,struct razer_rgb *color);
+void razer_add_frame_row(struct razer_rgb_frame *frame,int row_index,struct razer_rgb *color);
+void razer_sub_frame_row(struct razer_rgb_frame *frame,int row_index,struct razer_rgb *color);
+void razer_set_led(struct razer_rgb_frame *frame,int column_index,int row_index,struct razer_rgb *color);
+void razer_set_led_pos(struct razer_rgb_frame *frame,struct razer_pos *pos,struct razer_rgb *color);
+void razer_clear_all(struct razer_rgb_frame *frame);
+void razer_set_all(struct razer_rgb_frame *frame,struct razer_rgb *color);
 
 
-void release_locks(struct razer_keys_locks *locks);
+
+void release_locks(struct razer_chroma_device *device);
+void razer_copy_pos(struct razer_pos *src, struct razer_pos *dst);
+
 float hue2rgb(float p,float q,float t);
 void hsl2rgb(struct razer_hsl *hsl,struct razer_rgb *rgb);
 void rgb_from_hue(float percentage,float start_hue,float end_hue,struct razer_rgb *color);
@@ -254,20 +427,25 @@ void razer_convert_ascii_to_pos(unsigned char letter,struct razer_pos *pos);
 int razer_get_key_class(int keycode);
 
 
-void set_keys_column(struct razer_keys *keys,int column_index,struct razer_rgb *color);
-void add_keys_column(struct razer_keys *keys,int column_index,struct razer_rgb *color);
-void sub_keys_column(struct razer_keys *keys,int column_index,struct razer_rgb *color);
-void set_keys_row(struct razer_keys *keys,int row_index,struct razer_rgb *color);
-void add_keys_row(struct razer_keys *keys,int row_index,struct razer_rgb *color);
-void sub_keys_row(struct razer_keys *keys,int row_index,struct razer_rgb *color);
-void razer_set_key(struct razer_keys *keys,int column_index,int row_index,struct razer_rgb *color);
-void razer_set_key_pos(struct razer_keys *keys,struct razer_pos *pos,struct razer_rgb *color);
-void razer_clear_all(struct razer_keys *keys);
-void razer_set_all(struct razer_keys *keys,struct razer_rgb *color);
-void sub_heatmap(struct razer_keys *keys,int heatmap_reduction_amount);
-void draw_circle(struct razer_keys *keys,struct razer_pos *pos,int radius,struct razer_rgb *color);
-void draw_ring(struct razer_keys *keys,struct razer_pos *pos,struct razer_rgb *color);
+//void set_keys_column(struct razer_keys *keys,int column_index,struct razer_rgb *color);
+//void add_keys_column(struct razer_keys *keys,int column_index,struct razer_rgb *color);
+//void sub_keys_column(struct razer_keys *keys,int column_index,struct razer_rgb *color);
+//void set_keys_row(struct razer_keys *keys,int row_index,struct razer_rgb *color);
+//void add_keys_row(struct razer_keys *keys,int row_index,struct razer_rgb *color);
+//void sub_keys_row(struct razer_keys *keys,int row_index,struct razer_rgb *color);
+//void razer_set_key(struct razer_keys *keys,int column_index,int row_index,struct razer_rgb *color);
+//void razer_set_key_pos(struct razer_keys *keys,struct razer_pos *pos,struct razer_rgb *color);
+//void razer_clear_all(struct razer_keys *keys);
+//void razer_set_all(struct razer_keys *keys,struct razer_rgb *color);
 
+//void sub_heatmap(struct razer_keys *keys,int heatmap_reduction_amount);
+void razer_draw_line(struct razer_rgb_frame *frame,struct razer_pos *a,struct razer_pos *b,struct razer_rgb *color);
+void razer_draw_circle(struct razer_rgb_frame *frame,struct razer_pos *pos,int radius,struct razer_rgb *color);
+void razer_draw_ring(struct razer_rgb_frame *frame,struct razer_pos *pos,struct razer_rgb *color);
+
+
+void write_to_device_file(char *device_path, char *buffer, int buffer_length);
+void read_from_device_file(char *device_path, char *buffer, int buffer_length);
 
 //list of last keystrokes
 //time since hit /hitstamps

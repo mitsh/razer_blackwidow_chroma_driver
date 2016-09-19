@@ -1,12 +1,14 @@
 LIBS=-lm -ldl
 CFLAGS=
+DESTDIR?=/
 DEBUG_CFLAGS=
 #LDFLAGS=
 #DEBUG_LDFLAGS=
-LIBDBUS=$(shell echo \\\#include \<dbus/dbus.h\>\\n int main\(int c,char**v\){} | gcc `pkg-config --libs dbus-1` `pkg-config --cflags dbus-1`  -xc -o a.out - 2>/dev/null ;echo $$? ;rm a.out 2>/dev/null )
+LIBDBUS=$(shell pkg-config --libs dbus-1 > /dev/null 2>&1 && echo 0)
+LIBFFTW3=$(shell pkg-config --libs fftw3 > /dev/null 2>&1 && echo 0)
 
 ifeq ($(LIBDBUS), 0)
-	LIBS+= `pkg-config --libs dbus-1` 
+	LIBS+= `pkg-config --libs dbus-1`
 	CFLAGS+= `pkg-config --cflags dbus-1` -DUSE_DBUS
 	DEBUG_CFLAGS+= `pkg-config --cflags dbus-1` -DUSE_DBUS
 endif
@@ -31,64 +33,64 @@ RAZER_CHROMA_DAEMON_DEBUG_OBJ=razer_daemon.do razer_daemon_dbus.do razer_daemon_
 all: daemon_shared daemon_static daemon_debug daemon_fx
 
 daemon_debug: $(RAZER_CHROMA_DAEMON_DEBUG_OBJ)
-	@echo "::\033[32m COMPILING razer_bcd daemon [DEBUG]\033[0m"
+	@echo "\n::\033[32m COMPILING razer_bcd daemon [DEBUG]\033[0m"
 	@echo "======================================"
-	$(CC) -rdynamic $(RAZER_CHROMA_DAEMON_DEBUG_OBJ) ../lib/librazer_chroma.da $(LIBS) -o razer_bcd_debug_static 
-	$(CC) -L../lib -rdynamic $(RAZER_CHROMA_DAEMON_DEBUG_OBJ) -lrazer_chroma_debug $(LIBS) -o razer_bcd_debug_shared 
+	$(CC) -rdynamic $(RAZER_CHROMA_DAEMON_DEBUG_OBJ) ../lib/librazer_chroma.da $(LIBS) -o razer_bcd_debug_static
+	$(CC) -L../lib -rdynamic $(RAZER_CHROMA_DAEMON_DEBUG_OBJ) -lrazer_chroma_debug $(LIBS) -o razer_bcd_debug_shared
 
 daemon_static: $(RAZER_CHROMA_DAEMON_OBJ)
-	@echo "::\033[32m COMPILING razer_bcd daemon\033[0m"
+	@echo "\n::\033[32m COMPILING razer_bcd daemon\033[0m"
 	@echo "=============================="
-	$(CC) -rdynamic $(RAZER_CHROMA_DAEMON_OBJ) ../lib/librazer_chroma.a $(LIBS) -o razer_bcd_static 
+	$(CC) -rdynamic $(RAZER_CHROMA_DAEMON_OBJ) ../lib/librazer_chroma.a $(LIBS) -o razer_bcd_static
 	@strip razer_bcd_static
 
 daemon_shared: $(RAZER_CHROMA_DAEMON_OBJ)
-	@echo "::\033[32m COMPILING razer_bcd [SHARED]\033[0m"
+	@echo "\n::\033[32m COMPILING razer_bcd [SHARED]\033[0m"
 	@echo "================================"
 	$(CC) -L../lib -rdynamic $(RAZER_CHROMA_DAEMON_OBJ) -lrazer_chroma $(LIBS) -o razer_bcd
 	@strip razer_bcd
 
-%.o: %.c 
+%.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-%.do: %.c 
+%.do: %.c
 	$(CC) $(DEBUG_CFLAGS) -c -o $@ $<
 
 
-daemon_fx: 
+daemon_fx:
 	make -C fx all
 
-daemon_fx_clean: 
-	make -C fx clean 
+daemon_fx_clean:
+	make -C fx clean
 
 install:
-	@echo "::\033[32m INSTALLING razer_bcd daemon\033[0m"
+	@echo "\n::\033[34m Installing razer_bcd daemon\033[0m"
 	@echo "======================================"
-	@cp razer_bcd /usr/sbin
-	@echo "::\033[32m INSTALLING razer daemon fx files\033[0m"
+	@install -v -D razer_bcd $(DESTDIR)/usr/sbin/razer_bcd
+	@echo "\n::\033[34m Installing razer daemon fx files\033[0m"
 	@echo "====================================================="
-	mkdir -p /usr/share/razer_bcd/fx
-	cp fx/pez2001_collection.so /usr/share/razer_bcd/fx
-	cp fx/pez2001_mixer.so /usr/share/razer_bcd/fx
-	cp fx/pez2001_light_blast.so /usr/share/razer_bcd/fx
-	cp fx/pez2001_progress_bar.so /usr/share/razer_bcd/fx
-	cp fx/pez2001_compute_fft.so /usr/share/razer_bcd/fx
+	@install -v -D fx/pez2001_collection.so $(DESTDIR)/usr/share/razer_bcd/fx/pez2001_collection.so
+	@install -v -D fx/pez2001_mixer.so $(DESTDIR)/usr/share/razer_bcd/fx/pez2001_mixer.so
+	@install -v -D fx/pez2001_light_blast.so $(DESTDIR)/usr/share/razer_bcd/fx/pez2001_light_blast.so
+	@install -v -D fx/pez2001_progress_bar.so $(DESTDIR)/usr/share/razer_bcd/fx/pez2001_progress_bar.so
+ifeq ($(LIBFFTW3), 0)
+	@install -v -D fx/pez2001_compute_fft.so $(DESTDIR)/usr/share/razer_bcd/fx/pez2001_compute_fft.so
+endif
 
 uninstall:
-	@echo "::\033[32m REMOVING razer_bcd daemon\033[0m"
+	@echo "\n::\033[34m Uninstalling razer_bcd daemon\033[0m"
 	@echo "====================================="
-	@rm -f /usr/sbin/razer_bcd
-	@echo "::\033[32m REMOVING razer daemon fx files\033[0m"
+	@rm -f $(DESTDIR)/usr/sbin/razer_bcd
+	@echo "\n::\033[34m Uninstalling razer daemon fx files\033[0m"
 	@echo "====================================================="
-	@rm -f /usr/share/razer_bcd/fx/pez2001_collection.so
-	@rm -f /usr/share/razer_bcd/fx/pez2001_mixer.so
-	@rm -f /usr/share/razer_bcd/fx/pez2001_light_blast.so
-	@rm -f /usr/share/razer_bcd/fx/pez2001_progress_bar.so
-	@rm -f /usr/share/razer_bcd/fx/pez2001_compute_fft.so
+	@rm -f $(DESTDIR)/usr/share/razer_bcd/fx/pez2001_collection.so
+	@rm -f $(DESTDIR)/usr/share/razer_bcd/fx/pez2001_mixer.so
+	@rm -f $(DESTDIR)/usr/share/razer_bcd/fx/pez2001_light_blast.so
+	@rm -f $(DESTDIR)/usr/share/razer_bcd/fx/pez2001_progress_bar.so
+	@rm -f $(DESTDIR)/usr/share/razer_bcd/fx/pez2001_compute_fft.so
 
 clean: daemon_fx_clean
 	rm -f *.do *.da *.o razer_bcd razer_bcd_debug_shared razer_bcd_debug_static razer_bcd_static
 
-indent:	
+indent:
 	indent -bap -bli0 -i4 -l79 -ncs -npcs -npsl -fca -lc79 -fc1 -ts4 *.c *.h
-

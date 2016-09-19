@@ -1,104 +1,48 @@
-# razer_blackwidow_chroma_driver
-A Linux driver for the Razer Blackwidow Chroma keyboard (supports all lighting modes) includes a daemon for advanced effects
+# ATTENTION!
+# Have moved developemnt to my fork [here](https://github.com/terrycain/razer-drivers)
 
-Supports the Tournament Edition.
-Supports the Razer Firefly (internal effect switching).
+---
 
+---
 
+### Razer Drivers
 
+A collection of Linux drivers for the Razer devices, providing kernel drivers, DBus services and python bindings to interact with the DBus interface.
 
+Website: [Here](http://pez2001.github.io/razer_chroma_drivers/)
 
-## Installation for Debian based distros
+**Before raising an issue** saying something doesn't work, read [this](https://github.com/pez2001/razer_chroma_drivers/wiki/Troubleshooting) Wiki page, try not to create new issues if one exists, reopen it.
 
- 1. Download Sourcecode:
+## Support
+### Keyboard Support:
+ * Razer Blackwidow Classic *(all lighting modes)*
+ * Razer Blackwidow Ultimate 2012 *(all lighting modes)*
+ * Razer Blackwidow Ultimate 2013 *(all lighting modes)*
+ * Razer Blackwidow Chroma *(all lighting modes)*
+ * Razer Blackwidow Chroma Tournament Edition *(all lighting modes)*
+ * Razer Blackwidow X Chroma *(all lighting modes)*
+ * Razer Blade Stealth *(all lighting modes)*
+ * Razer Blackwidow Ultimate 2016 (all bar custom lighting)
 
-        git clone --depth=1 https://github.com/pez2001/razer_blackwidow_chroma_driver.git
+### Mousemat Support:
+ * Razer Firefly *(all lighting modes)*
 
- 1. Execute installation script:
+### Mouse Support:
+ * Razer Mamba *(all lighting modes)*
+ * Razer Abyssus (all modes bar the refresh rate)
 
-        cd razer_blackwidow_chroma_driver
-        ./install_driver_debian.sh
+## Installation
+[Here](https://github.com/pez2001/razer_chroma_drivers/wiki/Installation) is a page documenting the installation and uninstallation procedures.
 
- 1. Reboot
- 
+## Applications
 
+The following applications compliment and interact with this driver:
 
-## Installation for Debian/Ubuntu based distros (creating a .deb package)
-You can either install this using the above Debian method or use the packaged method.
-
- 1. First as above download the source code
-
-        git clone --depth=1 https://github.com/pez2001/razer_blackwidow_chroma_driver.git
-        cd razer_blackwidow_chroma_drive
-
- 1. Install the needed packages which are needed to build the software
-
-        sudo apt-get install -y dpkg-dev libdbus-1-dev jq libsdl2-dev libsdl2-image-dev libfftw3-dev
-
- 1. Build the software and driver
-
-        make
-
- 1. Build the package
-
-        ./package_for_ubuntu.sh
-        OR
-        ./package_for_debian.sh
-
- 1. The command above will output something like `dpkg-name: info: moved 'tmp.3PnAtckx3o.deb' to '/tmp/razer-chroma-driver_1.0.0_amd64.deb'` so then you will need to install the file using:
-
-        sudo dpkg -i /tmp/razer-chroma-driver_1.0.0_amd64.deb
-
- 1. (Optional) You can clean source directoy if you so wish
-
-        make clean
-
-Installing the `.deb` file has multiple benefits. Firstly installing the deb file keeps track of all the installed files and simplifys removal of the driver and daemon. 
-
-Ubuntu uses upstart so there is an upstart style init script provided. There is log file for upstart jobs under `/var/log/upstart` so you can view startup issues with `tail /var/log/upstart/razer_bcd.log`.
-
-The Debian version I have packaged for is 8.2 which uses systemd so I've provided a script for that.
-
-The driver is registered with DKMS (Dynamic Kernel Module Support), this will recompile the driver whenever a new kernel is installed.
-
-To remove the driver/daemon
-        sudo dpkg -r razer-chroma-driver
-
-To manage upstart jobs it't as simple as
-
-        sudo status razer_bcd
-        sudo start razer_bcd
-        sudo stop razer_bcd
-        sudo restart razer_bcd
-But on ubuntu you can use `service razer_bcd ACTION` where ACTION is `start|stop|status|restart`
-
-On Debian you can control the driver doing `/etc/init.d/razer_bcd ACTION` or using systemd which is the preferred method (if you have systemd installed that is). Below are some systemd management commands
-
-        sudo systemctl status razer_bcd
-        sudo systemctl start razer_bcd
-        sudo systemctl stop razer_bcd
-        sudo systemctl restart razer_bcd
+* [Polychromatic Controller](https://github.com/lah7/polychromatic-controller) - a graphical management tool and tray applet to managing Razer peripherals.
+* [MarcoW](https://github.com/igorbb/MacroW) - a simple tool to record and play keyboard macros.
 
 
-
-
-## Installation for non debian based distros
-
-
- - Install dependencies (libdbus-1-dev,jq)
- - Execute install script:
-        sudo make -s all install
- - Reboot
-
-
-
-
-
-
-
-
-
-## Usage
+## Command Line Usage
 
 
  Have a look at the scripts directory.
@@ -108,7 +52,7 @@ On Debian you can control the driver doing `/etc/init.d/razer_bcd ACTION` or usi
 
  - Changing effect example
 
- :: the following command will create a render node for the effect with unique id: 8 [fx_uid,name,description] ::
+ :: the following command will create a render node for the effect with the unique id: 8 [fx_uid,name,description] ::
 
 	razer_bcd_controller -C 8 "bars example" "new rendering node"
 
@@ -153,7 +97,7 @@ On Debian you can control the driver doing `/etc/init.d/razer_bcd ACTION` or usi
 	]}
 
 :: Setting a parameter for an effect with the unique id: 2 
-   [rn_uid,parameter_uid,
+   [rn_uid,parameter_index,
     array_index (use -1 if not an array),
     parameter_type,value(s) (enquote multiple values and use whitespaces to seperate)] ::	
 
@@ -177,7 +121,7 @@ On Debian you can control the driver doing `/etc/init.d/razer_bcd ACTION` or usi
 ### Bash functions
 
 In the file `/usr/share/razer_bcd/bash_keyboard_functions.sh` there are some functions used before and after the daemon is started/stopped. These functions bind and unbind the chroma to the kernel
-driver. You can source the file and then run `bind_all_chromas`, this will attempt to bind chromas and skip any already binded. There is also a function called `unbind_all_chromas` which as you would
+driver. You can source the file and then run `bind_all`, this will attempt to bind chromas and skip any already binded. There is also a function called `unbind_all` which as you would
 of guessed unbinds all chroma keyboards.
 
 
@@ -205,28 +149,15 @@ of guessed unbinds all chroma keyboards.
 
 
 
-
-
-
-
-
-
 ## Status of Code
 
- - Driver : Release Candidate
- - Daemon : Alpha
- - Daemon Effects : Release Candidate
- - Daemon Controller : Beta
- - Libraries : Beta
- - Installer : Beta
- - Packages : Beta
-
-
-
-
-
-
-
+ - **Driver :** Release Candidate
+ - **Daemon :** Alpha
+ - **Daemon Effects :** Release Candidate
+ - **Daemon Controller :** Beta
+ - **Libraries :** Beta
+ - **Installer :** Beta
+ - **Packages :** Beta
 
 ## First Steps Tutorial
 
@@ -341,7 +272,7 @@ Its not that much different than writing a self-hosted effect.
 
 Any effect or tool you might want to contribute is welcome.
 Please use your own source files to host your effects for merging.
-Fx setup scripts,bug fixes,feature requests,etc are also welcome.
+FX setup scripts, bug fixes, feature requests, etc are also welcome.
 
 
 ## TODO
@@ -351,7 +282,8 @@ Fx setup scripts,bug fixes,feature requests,etc are also welcome.
 - key locking / automatically skip key on following frame changes 
   / manual overwrite still possible / catch in convience functions
 - daemon,internal heatmap examples
-- gui controller (web interface?)
+- integrate `examples/dynamic` with daemon for passwordless GUI interface ?
+- daemon to remember current effect and colours in use ?
 - move remaining lib functions to razer_ namespace
 - move all daemon types to daemon_ namespace
 - split library into seperate source files (rgb,frames,hsl,drawing)
@@ -363,6 +295,7 @@ Fx setup scripts,bug fixes,feature requests,etc are also welcome.
 - configuration for daemon (mouse input device,chroma devices to be used,etc)
 - add custom event sending via controller api
 - add list loaded libs command (automatic dupe check too)
+- add a minimal (custom mode only) daemon integrated libusb driver (windows/mac osx support)
 
 
 
@@ -371,21 +304,20 @@ Fx setup scripts,bug fixes,feature requests,etc are also welcome.
 
 
 ## Additional Credits
-
-
  - Various installation and makefile related fixes by Jordan King (manual merge)
  - Ubuntu file permission fixes by Carsten Teibes (pulled)
  - Debugging help of Mosie1 with Linux Mint script bugs (testing)
  - Example Effect  : Dynamic by TheKiwi5000 (pulled)
  - Snake Example by James Shawver (pulled and edited slightly)
- - Identifying of missing speed parameter 
-   for the reactive mode by Oleg Finkelshteyn (implemented by maintainer)
+ - Identifying of missing speed parameter for the reactive mode by Oleg Finkelshteyn (implemented by maintainer)
    discoverying of a previous unknown reactive+wave mode.
    (call reactive script & wave script with none as parameter)
    support for the tournament edition(manual merge)
  - Modifications to dynamic example by Stephanie Sunshine (pulled)
- - Deb packaging, dkms support, shell scripting additions and ubuntu fixes by Terry Cain (pulled)
-
+ - Mamba Driver, Device quering functionality in the kernel, Deb packaging, DKMS support, shell scripting additions and ubuntu fixes by Terry Cain (pulled)
+ - GUI Interface for BlackWidow Chroma Keyboards by Luke Horwell [(now migrated as Polychromatic Controller)](https://github.com/lah7/polychromatic-controller)
+ - Ubuntu fixes by Brad Murmz (pulled)
+ - Default Keyboard profiles by Mathieu Okuyama (manual merge)
 
 ## Donations (in Euros)
 
@@ -395,13 +327,13 @@ Goal 1 (66/66)  [Completed]:
 
  - Reward:  Sound driven example effect(Spectrum based).
 
-Stretch Goal 1 (155>166):
+Stretch Goal 1 (166 of 166):
  
 Buying a Razer Tartarus (also no driver written yet)
 
  - Reward:  Packaging for major distributions (debian based,redhat based,tar balls)
 
-Stretch Goal 2 (>333):
+Stretch Goal 2 (213 of 333):
  Buying a Razer Deathstalker Utimate (no driver too)
  - Reward:  A gtk based GUI (simple , something to build upon further).
 
@@ -415,6 +347,15 @@ Thank you for all donations i really appreciate it!
 
   - Luca Steeb 5
   - Klee Dienes 150
-
+  - Josh Ventura 25
+  - Trace McCabe 25
+  - Anonymous 5
+  - Luis Fernandes 3.5
 
   You can send your donations via PayPal to : feckelburger [at] gmx.net
+  
+  You can also send PayPal donations to terry@terrys-home.co.uk if you want :wink:
+
+-----
+
+The project is licensed under the GPL and is not affiliated with [Razer, Inc](http://www.razerzone.com/).

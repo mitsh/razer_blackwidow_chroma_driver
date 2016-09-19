@@ -1,3 +1,24 @@
+/* 
+ * razer_chroma_drivers - a driver/tools collection for razer chroma devices
+ * (c) 2015 by Tim Theede aka Pez2001 <pez2001@voyagerproject.de> / vp
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA
+ *
+ * THIS SOFTWARE IS SUPPLIED AS IT IS WITHOUT ANY WARRANTY!
+ *
+ */
 #include "razer_chroma_controller.h"
 
 #ifdef USE_DBUS
@@ -134,7 +155,7 @@ void dc_pause(struct razer_daemon_controller *controller)
 	dbus_message_unref(msg);
 }
 
-int dc_render_node_create(struct razer_daemon_controller *controller,int effect_uid,char *name,char *description)
+int dc_render_node_create(struct razer_daemon_controller *controller,int effect_uid,int device_uid,char *name,char *description)
 {
 	DBusMessage *msg;
 	DBusMessageIter args;
@@ -143,6 +164,8 @@ int dc_render_node_create(struct razer_daemon_controller *controller,int effect_
 		dc_error_close(controller,"Error creating Message\n");
 	dbus_message_iter_init_append(msg,&args);
 	if(!dbus_message_iter_append_basic(&args,DBUS_TYPE_INT32,&effect_uid))
+		dc_error_close(controller,"Out of memory!\n"); 
+	if(!dbus_message_iter_append_basic(&args,DBUS_TYPE_INT32,&device_uid))
 		dc_error_close(controller,"Out of memory!\n"); 
 	if(!dbus_message_iter_append_basic(&args,DBUS_TYPE_STRING,&name))
 		dc_error_close(controller,"Out of memory!\n"); 
@@ -172,11 +195,36 @@ int dc_render_node_create(struct razer_daemon_controller *controller,int effect_
 	return(render_node_uid);
 }
 
-void dc_render_node_set(struct razer_daemon_controller *controller,int render_node_uid)
+void dc_render_node_reset(struct razer_daemon_controller *controller,int render_node_uid)
+{
+	DBusMessage *msg;
+	//DBusMessageIter args;
+	char *path = str_CreateEmpty();
+	path = str_CatFree(path,"/");
+	char *suid = str_FromLong(render_node_uid);
+	path = str_CatFree(path,suid);
+	free(suid);
+	msg = dbus_message_new_method_call("org.voyagerproject.razer.daemon",path,"org.voyagerproject.razer.daemon.render_node","reset");
+	if(!msg)
+		dc_error_close(controller,"Error creating Message\n");
+	if(!dbus_connection_send_with_reply(controller->dbus,msg,&controller->pending,-1))
+		dc_error_close(controller,"Out of memory!\n"); 
+	if(!controller->pending)
+		dc_error_close(controller,"No pending call\n"); 
+	dbus_connection_flush(controller->dbus);
+	dbus_message_unref(msg);
+}
+
+void dc_default_render_node_set(struct razer_daemon_controller *controller,int device_uid,int render_node_uid) 
 {
 	DBusMessage *msg;
 	DBusMessageIter args;
-	msg = dbus_message_new_method_call("org.voyagerproject.razer.daemon","/","org.voyagerproject.razer.daemon.render_node","set");
+	char *path = str_CreateEmpty();
+	path = str_CatFree(path,"/");
+	char *duid = str_FromLong(device_uid);
+	path = str_CatFree(path,duid);
+	free(duid);
+	msg = dbus_message_new_method_call("org.voyagerproject.razer.daemon",path,"org.voyagerproject.razer.daemon.render_node","set");
 	if(!msg)
 		dc_error_close(controller,"Error creating Message\n");
 	dbus_message_iter_init_append(msg,&args);
@@ -188,7 +236,9 @@ void dc_render_node_set(struct razer_daemon_controller *controller,int render_no
 		dc_error_close(controller,"No pending call\n"); 
 	dbus_connection_flush(controller->dbus);
 	dbus_message_unref(msg);
+	free(path);//TODO gets not freed on error
 }
+
 
 char *dc_render_node_parameter_get(struct razer_daemon_controller *controller,int render_node_uid,int parameter_uid,int array_index)
 {
@@ -256,6 +306,8 @@ int dc_parameter_type_from_string(char *type)
 		return(RAZER_PARAMETER_TYPE_POS);
 	else if(!strcasecmp(type,"Node"))
 		return(RAZER_PARAMETER_TYPE_RENDER_NODE);
+	else if(!strcasecmp(type,"String"))
+		return(RAZER_PARAMETER_TYPE_STRING);
 	else if(!strcasecmp(type,"Float_Range"))
 		return(RAZER_PARAMETER_TYPE_FLOAT_RANGE);
 	else if(!strcasecmp(type,"Int_Range"))
@@ -1011,11 +1063,16 @@ void dc_render_node_sub_add(struct razer_daemon_controller *controller,int rende
 	free(path);
 }
 
-void dc_frame_buffer_connect(struct razer_daemon_controller *controller,int render_node_uid)
+void dc_frame_buffer_connect(struct razer_daemon_controller *controller,int device_uid,int render_node_uid)
 {
 	DBusMessage *msg;
 	DBusMessageIter args;
-	msg = dbus_message_new_method_call("org.voyagerproject.razer.daemon","/","org.voyagerproject.razer.daemon.frame_buffer","connect");
+	char *path = str_CreateEmpty();
+	path = str_CatFree(path,"/");
+	char *duid = str_FromLong(device_uid);
+	path = str_CatFree(path,duid);
+	free(duid);
+	msg = dbus_message_new_method_call("org.voyagerproject.razer.daemon",path,"org.voyagerproject.razer.daemon.device.frame_buffer","connect");
 	if(!msg)
 		dc_error_close(controller,"Error creating Message\n");
 	dbus_message_iter_init_append(msg,&args);
@@ -1027,12 +1084,18 @@ void dc_frame_buffer_connect(struct razer_daemon_controller *controller,int rend
 		dc_error_close(controller,"No pending call\n"); 
 	dbus_connection_flush(controller->dbus);
 	dbus_message_unref(msg);
+	free(path);//TODO gets not freed on error
 }
 
-void dc_frame_buffer_disconnect(struct razer_daemon_controller *controller)
+void dc_frame_buffer_disconnect(struct razer_daemon_controller *controller,int device_uid)
 {
 	DBusMessage *msg;
-	msg = dbus_message_new_method_call("org.voyagerproject.razer.daemon","/","org.voyagerproject.razer.daemon.frame_buffer","disconnect");
+	char *path = str_CreateEmpty();
+	path = str_CatFree(path,"/");
+	char *duid = str_FromLong(device_uid);
+	path = str_CatFree(path,duid);
+	free(duid);
+	msg = dbus_message_new_method_call("org.voyagerproject.razer.daemon",path,"org.voyagerproject.razer.daemondevice.frame_buffer","disconnect");
 	if(!msg)
 		dc_error_close(controller,"Error creating Message\n");
 	if(!dbus_connection_send_with_reply(controller->dbus,msg,&controller->pending,-1))
@@ -1041,6 +1104,7 @@ void dc_frame_buffer_disconnect(struct razer_daemon_controller *controller)
 		dc_error_close(controller,"No pending call\n"); 
 	dbus_connection_flush(controller->dbus);
 	dbus_message_unref(msg);
+	free(path);//TODO gets not freed on error
 }
 
 char *dc_fx_list(struct razer_daemon_controller *controller)
@@ -1121,11 +1185,16 @@ char *dc_render_nodes_list(struct razer_daemon_controller *controller)
 	return(list);
 }
 
-char *dc_rendering_nodes_list(struct razer_daemon_controller *controller)
+char *dc_rendering_nodes_list(struct razer_daemon_controller *controller,int device_uid)
 {
 	DBusMessage *msg;
 	DBusMessageIter args;
-	msg = dbus_message_new_method_call("org.voyagerproject.razer.daemon","/","org.voyagerproject.razer.daemon.render_nodes","render_list");
+	char *path = str_CreateEmpty();
+	path = str_CatFree(path,"/");
+	char *duid = str_FromLong(device_uid);
+	path = str_CatFree(path,duid);
+	free(duid);
+	msg = dbus_message_new_method_call("org.voyagerproject.razer.daemon","/","org.voyagerproject.razer.daemon.device.render_nodes","render_list");
 	if(!msg)
 		dc_error_close(controller,"Error creating Message\n");
 	if(!dbus_connection_send_with_reply(controller->dbus,msg,&controller->pending,-1))
@@ -1157,6 +1226,7 @@ char *dc_rendering_nodes_list(struct razer_daemon_controller *controller)
 	//printf("fx List: %s\n",list);
 	list = str_Copy(list);
 	dbus_message_unref(msg);   
+	free(path);//TODO gets not freed on error
 	return(list);
 }
 
@@ -1248,8 +1318,6 @@ char *dc_render_node_parameters_list(struct razer_daemon_controller *controller,
 	return(list);
 }
 
-
-
 int dc_is_paused(struct razer_daemon_controller *controller)
 {
 	DBusMessage *msg;
@@ -1330,11 +1398,16 @@ int dc_fps_get(struct razer_daemon_controller *controller)
 	return(fps);
 }
 
-int dc_frame_buffer_get(struct razer_daemon_controller *controller)
+int dc_frame_buffer_get(struct razer_daemon_controller *controller,int device_uid)
 {
 	DBusMessage *msg;
 	DBusMessageIter args;
-	msg = dbus_message_new_method_call("org.voyagerproject.razer.daemon","/","org.voyagerproject.razer.daemon.frame_buffer","get");
+	char *path = str_CreateEmpty();
+	path = str_CatFree(path,"/");
+	char *duid = str_FromLong(device_uid);
+	path = str_CatFree(path,duid);
+	free(duid);
+	msg = dbus_message_new_method_call("org.voyagerproject.razer.daemon",path,"org.voyagerproject.razer.daemon.device.frame_buffer","get");
 	if(!msg)
 		dc_error_close(controller,"Error creating Message\n");
 	if(!dbus_connection_send_with_reply(controller->dbus,msg,&controller->pending,-1))
@@ -1358,6 +1431,7 @@ int dc_frame_buffer_get(struct razer_daemon_controller *controller)
 	else
 		dbus_message_iter_get_basic(&args,&uid);
 	dbus_message_unref(msg);   
+	free(path);//TODO gets not freed on error
 	return(uid);
 }
 
@@ -1375,6 +1449,170 @@ void dc_load_fx_lib(struct razer_daemon_controller *controller,char *fx_pathname
 		dc_error_close(controller,"Out of memory!\n"); 
 	if(!controller->pending)
 		dc_error_close(controller,"No pending call\n"); 
+	dbus_connection_flush(controller->dbus);
+	dbus_message_unref(msg);
+}
+
+void dc_set_spectrum_mode(struct razer_daemon_controller *controller)
+{
+	DBusMessage *msg;
+	msg = dbus_message_new_method_call("org.voyagerproject.razer.daemon","/","org.voyagerproject.razer.daemon.driver_effect","spectrum");
+	if(!msg)
+		dc_error_close(controller,"Error creating Message\n");
+	if(!dbus_connection_send_with_reply(controller->dbus,msg,&controller->pending,-1))
+		dc_error_close(controller,"Out of memory!\n");
+	if(!controller->pending)
+		dc_error_close(controller,"No pending call\n");
+	dbus_connection_flush(controller->dbus);
+	dbus_message_unref(msg);
+}
+
+void dc_set_wave_mode(struct razer_daemon_controller *controller, unsigned char direction)
+{
+	DBusMessage *msg;
+	DBusMessageIter args;
+	msg = dbus_message_new_method_call("org.voyagerproject.razer.daemon","/","org.voyagerproject.razer.daemon.driver_effect","wave");
+	if(!msg)
+		dc_error_close(controller,"Error creating Message\n");
+	dbus_message_iter_init_append(msg,&args);
+	if(!dbus_message_iter_append_basic(&args,DBUS_TYPE_BYTE,&direction))
+		dc_error_close(controller,"Out of memory!\n");
+	if(!dbus_connection_send_with_reply(controller->dbus,msg,&controller->pending,-1))
+		dc_error_close(controller,"Out of memory!\n");
+	if(!controller->pending)
+		dc_error_close(controller,"No pending call\n");
+	dbus_connection_flush(controller->dbus);
+	dbus_message_unref(msg);
+}
+
+void dc_set_reactive_mode(struct razer_daemon_controller *controller, unsigned char speed, unsigned char red, unsigned char green, unsigned char blue)
+{
+	DBusMessage *msg;
+	DBusMessageIter args;
+	msg = dbus_message_new_method_call("org.voyagerproject.razer.daemon","/","org.voyagerproject.razer.daemon.driver_effect","reactive");
+	if(!msg)
+		dc_error_close(controller,"Error creating Message\n");
+	dbus_message_iter_init_append(msg,&args);
+	if(!dbus_message_iter_append_basic(&args,DBUS_TYPE_BYTE,&speed))
+			dc_error_close(controller,"Out of memory!\n");
+	if(!dbus_message_iter_append_basic(&args,DBUS_TYPE_BYTE,&red))
+		dc_error_close(controller,"Out of memory!\n");
+	if(!dbus_message_iter_append_basic(&args,DBUS_TYPE_BYTE,&green))
+			dc_error_close(controller,"Out of memory!\n");
+	if(!dbus_message_iter_append_basic(&args,DBUS_TYPE_BYTE,&blue))
+			dc_error_close(controller,"Out of memory!\n");
+
+	if(!dbus_connection_send_with_reply(controller->dbus,msg,&controller->pending,-1))
+		dc_error_close(controller,"Out of memory!\n");
+	if(!controller->pending)
+		dc_error_close(controller,"No pending call\n");
+	dbus_connection_flush(controller->dbus);
+	dbus_message_unref(msg);
+}
+
+void dc_set_breath_mode(struct razer_daemon_controller *controller, unsigned char breath_type, unsigned char red, unsigned char green, unsigned char blue, unsigned char red2, unsigned char green2, unsigned char blue2) // ??
+{
+	DBusMessage *msg;
+	DBusMessageIter args;
+	msg = dbus_message_new_method_call("org.voyagerproject.razer.daemon","/","org.voyagerproject.razer.daemon.driver_effect","breath");
+	if(!msg)
+		dc_error_close(controller,"Error creating Message\n");
+
+	if(breath_type == 1 || breath_type == 2)
+	{
+		dbus_message_iter_init_append(msg,&args);
+		if(!dbus_message_iter_append_basic(&args,DBUS_TYPE_BYTE,&red))
+			dc_error_close(controller,"Out of memory!\n");
+		if(!dbus_message_iter_append_basic(&args,DBUS_TYPE_BYTE,&green))
+			dc_error_close(controller,"Out of memory!\n");
+		if(!dbus_message_iter_append_basic(&args,DBUS_TYPE_BYTE,&blue))
+			dc_error_close(controller,"Out of memory!\n");
+	}
+	if(breath_type == 2)
+	{
+		dbus_message_iter_init_append(msg,&args);
+		if(!dbus_message_iter_append_basic(&args,DBUS_TYPE_BYTE,&red2))
+			dc_error_close(controller,"Out of memory!\n");
+		if(!dbus_message_iter_append_basic(&args,DBUS_TYPE_BYTE,&green2))
+			dc_error_close(controller,"Out of memory!\n");
+		if(!dbus_message_iter_append_basic(&args,DBUS_TYPE_BYTE,&blue2))
+			dc_error_close(controller,"Out of memory!\n");
+	}
+
+	if(!dbus_connection_send_with_reply(controller->dbus,msg,&controller->pending,-1))
+		dc_error_close(controller,"Out of memory!\n");
+	if(!controller->pending)
+		dc_error_close(controller,"No pending call\n");
+	dbus_connection_flush(controller->dbus);
+	dbus_message_unref(msg);
+}
+
+void dc_set_static_mode(struct razer_daemon_controller *controller, unsigned char red, unsigned char green, unsigned char blue)
+{
+	DBusMessage *msg;
+	DBusMessageIter args;
+	msg = dbus_message_new_method_call("org.voyagerproject.razer.daemon","/","org.voyagerproject.razer.daemon.driver_effect","static");
+	if(!msg)
+		dc_error_close(controller,"Error creating Message\n");
+	dbus_message_iter_init_append(msg,&args);
+	if(!dbus_message_iter_append_basic(&args,DBUS_TYPE_BYTE,&red))
+		dc_error_close(controller,"Out of memory!\n");
+	if(!dbus_message_iter_append_basic(&args,DBUS_TYPE_BYTE,&green))
+			dc_error_close(controller,"Out of memory!\n");
+	if(!dbus_message_iter_append_basic(&args,DBUS_TYPE_BYTE,&blue))
+			dc_error_close(controller,"Out of memory!\n");
+
+	if(!dbus_connection_send_with_reply(controller->dbus,msg,&controller->pending,-1))
+		dc_error_close(controller,"Out of memory!\n");
+	if(!controller->pending)
+		dc_error_close(controller,"No pending call\n");
+	dbus_connection_flush(controller->dbus);
+	dbus_message_unref(msg);
+}
+
+void dc_set_none_mode(struct razer_daemon_controller *controller)
+{
+	DBusMessage *msg;
+	msg = dbus_message_new_method_call("org.voyagerproject.razer.daemon","/","org.voyagerproject.razer.daemon.driver_effect","none");
+	if(!msg)
+		dc_error_close(controller,"Error creating Message\n");
+	if(!dbus_connection_send_with_reply(controller->dbus,msg,&controller->pending,-1))
+		dc_error_close(controller,"Out of memory!\n");
+	if(!controller->pending)
+		dc_error_close(controller,"No pending call\n");
+	dbus_connection_flush(controller->dbus);
+	dbus_message_unref(msg);
+}
+
+void dc_set_keyboard_brightness(struct razer_daemon_controller *controller, unsigned char brightness)
+{
+	DBusMessage *msg;
+	DBusMessageIter args;
+	msg = dbus_message_new_method_call("org.voyagerproject.razer.daemon","/","org.voyagerproject.razer.daemon","raw_keyboard_brightness");
+	if(!msg)
+		dc_error_close(controller,"Error creating Message\n");
+	dbus_message_iter_init_append(msg,&args);
+	if(!dbus_message_iter_append_basic(&args,DBUS_TYPE_BYTE,&brightness))
+		dc_error_close(controller,"Out of memory!\n");
+
+	if(!dbus_connection_send_with_reply(controller->dbus,msg,&controller->pending,-1))
+		dc_error_close(controller,"Out of memory!\n");
+	if(!controller->pending)
+		dc_error_close(controller,"No pending call\n");
+	dbus_connection_flush(controller->dbus);
+	dbus_message_unref(msg);
+}
+
+void dc_enable_macro_keys(struct razer_daemon_controller *controller)
+{
+	DBusMessage *msg;
+	msg = dbus_message_new_method_call("org.voyagerproject.razer.daemon","/","org.voyagerproject.razer.daemon","enable_macro_keys");
+	if(!msg)
+		dc_error_close(controller,"Error creating Message\n");
+	if(!dbus_connection_send_with_reply(controller->dbus,msg,&controller->pending,-1))
+		dc_error_close(controller,"Out of memory!\n");
+	if(!controller->pending)
+		dc_error_close(controller,"No pending call\n");
 	dbus_connection_flush(controller->dbus);
 	dbus_message_unref(msg);
 }

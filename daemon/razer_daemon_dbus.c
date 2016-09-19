@@ -1,4 +1,25 @@
-#include "razer_daemon.h"
+/* 
+ * razer_chroma_drivers - a driver/tools collection for razer chroma devices
+ * (c) 2015 by Tim Theede aka Pez2001 <pez2001@voyagerproject.de> / vp
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA
+ *
+ * THIS SOFTWARE IS SUPPLIED AS IT IS WITHOUT ANY WARRANTY!
+ *
+ */
+ #include "razer_daemon.h"
 
 #ifdef USE_DBUS
 
@@ -103,6 +124,8 @@ int daemon_dbus_announce(struct razer_daemon *daemon)
 		return(0);
 	if(!daemon_dbus_add_method(daemon,"org.voyagerproject.razer.daemon.render_node","create"))
 		return(0);
+	if(!daemon_dbus_add_method(daemon,"org.voyagerproject.razer.daemon.render_node","reset"))
+		return(0);
 	if(!daemon_dbus_add_method(daemon,"org.voyagerproject.razer.daemon.render_node","set")) //TODO Remove 
 		return(0);
 	if(!daemon_dbus_add_method(daemon,"org.voyagerproject.razer.daemon.render_node.opacity","set"))
@@ -151,6 +174,35 @@ int daemon_dbus_announce(struct razer_daemon *daemon)
 		return(0);
 	if(!daemon_dbus_add_method(daemon,"org.voyagerproject.razer.daemon","quit"))
 		return(0);
+
+	if(!daemon_dbus_add_method(daemon,"org.voyagerproject.razer.daemon","enable_macro_keys"))
+		return(0);
+	if(!daemon_dbus_add_method(daemon,"org.voyagerproject.razer.daemon","raw_keyboard_brightness"))
+		return(0);
+	if(!daemon_dbus_add_method(daemon,"org.voyagerproject.razer.daemon","set_game_mode"))
+		return(0);
+	if(!daemon_dbus_add_method(daemon,"org.voyagerproject.razer.daemon","serial"))
+		return(0);
+	if(!daemon_dbus_add_method(daemon,"org.voyagerproject.razer.daemon","device_name"))
+		return(0);
+	if(!daemon_dbus_add_method(daemon,"org.voyagerproject.razer.daemon.driver_effect","none"))
+		return(0);
+	if(!daemon_dbus_add_method(daemon,"org.voyagerproject.razer.daemon.driver_effect","static"))
+		return(0);
+	if(!daemon_dbus_add_method(daemon,"org.voyagerproject.razer.daemon.driver_effect","breath"))
+		return(0);
+	if(!daemon_dbus_add_method(daemon,"org.voyagerproject.razer.daemon.driver_effect","reactive"))
+		return(0);
+	if(!daemon_dbus_add_method(daemon,"org.voyagerproject.razer.daemon.driver_effect","wave"))
+		return(0);
+	if(!daemon_dbus_add_method(daemon,"org.voyagerproject.razer.daemon.driver_effect","spectrum"))
+		return(0);
+	if(!daemon_dbus_add_method(daemon,"org.voyagerproject.razer.daemon.driver_effect","starlight"))
+		return(0);
+	if(!daemon_dbus_add_method(daemon,"org.voyagerproject.razer.daemon.devices","get_number_of_devices"))
+		return(0);
+	if(!daemon_dbus_add_method(daemon,"org.voyagerproject.razer.daemon.devices","set_active"))
+		return(0);
 	return(1);
 }
 
@@ -172,8 +224,613 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 	msg = dbus_connection_pop_message(daemon->dbus);
 	if(!msg)
 		return(0);
+
+
 	//printf("dbus: received message:type:%d ,path:%s ,interface:%s ,member:%s\n",dbus_message_get_type(msg),dbus_message_get_path(msg),dbus_message_get_interface(msg),dbus_message_get_member(msg));
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_nodes", "list")) 
+
+	if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon", "enable_macro_keys"))
+	{
+		#ifdef USE_DEBUGGING
+			printf("\ndbus: method enable_macro_keys called\n");
+		#endif
+
+		/*char *device_path = str_CreateEmpty();
+		device_path = str_CatFree(device_path, daemon->chroma->device_path);
+		device_path = str_CatFree(device_path, "/macro_keys");
+
+		#ifdef USE_DEBUGGING
+			printf("Device path: %s\n", device_path);
+		#endif
+
+		write_to_device_file(device_path, "1", 1);
+		free(device_path);
+		*/
+		razer_enable_macro_keys(daemon->chroma);
+		reply = dbus_message_new_method_return(msg);
+ 		dbus_uint32_t serial = 0;
+ 		if(!dbus_connection_send(daemon->dbus,reply,&serial))
+			daemon_kill(daemon,"dbus: Out Of Memory!\n");
+		dbus_connection_flush(daemon->dbus);
+	}
+	else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.devices", "set_active"))
+	{
+		int active=0;
+		reply = dbus_message_new_method_return(msg);
+
+		if(dbus_message_iter_init(msg, &parameters))
+		{
+			if(dbus_message_iter_get_arg_type(&parameters) == DBUS_TYPE_INT32)
+			{
+				dbus_message_iter_get_basic(&parameters,&active);
+			}
+			dbus_message_iter_init_append(reply,&parameters);
+			#ifdef USE_DEBUGGING
+				printf("\ndbus: setting active device to: %d\n", active);
+			#endif
+
+			razer_set_active_device_id(daemon->chroma,active);
+
+		}
+		dbus_uint32_t serial = 0;
+		if(!dbus_connection_send(daemon->dbus,reply,&serial))
+			daemon_kill(daemon,"dbus: Out Of Memory!\n");
+		dbus_connection_flush(daemon->dbus);
+	}
+	else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.devices", "get_number_of_devices"))
+	{
+		#ifdef USE_DEBUGGING
+			printf("\ndbus: method get_number_of_devices called\n");
+		#endif
+		long num_devices = razer_get_num_devices(daemon->chroma);
+
+		reply = dbus_message_new_method_return(msg);
+		dbus_message_iter_init_append(reply,&parameters);
+
+		if(!dbus_message_iter_append_basic(&parameters,DBUS_TYPE_INT32,&num_devices)) 
+			daemon_kill(daemon,"dbus: Out Of Memory!\n");
+ 		dbus_uint32_t serial = 0;
+ 		if(!dbus_connection_send(daemon->dbus,reply,&serial))
+			daemon_kill(daemon,"dbus: Out Of Memory!\n");
+		dbus_connection_flush(daemon->dbus);
+	}
+	else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon", "serial"))
+	{
+		#ifdef USE_DEBUGGING
+			printf("\ndbus: method serial called\n");
+		#endif
+		char* serial_str = (char*)calloc(16, sizeof(char));
+		razer_get_serial(daemon->chroma, &serial_str[0]);
+
+		reply = dbus_message_new_method_return(msg);
+		dbus_message_iter_init_append(reply,&parameters);
+
+		if(!dbus_message_iter_append_basic(&parameters,DBUS_TYPE_STRING,&serial_str)) 
+			daemon_kill(daemon,"dbus: Out Of Memory!\n");
+ 		dbus_uint32_t serial = 0;
+ 		if(!dbus_connection_send(daemon->dbus,reply,&serial))
+			daemon_kill(daemon,"dbus: Out Of Memory!\n");
+		dbus_connection_flush(daemon->dbus);
+		free(serial_str);
+	}
+	else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon", "device_name"))
+	{
+		#ifdef USE_DEBUGGING
+			printf("\ndbus: method device_name called\n");
+		#endif
+		char* name_str = (char*)calloc(64, sizeof(char));
+		razer_get_name(daemon->chroma, &name_str[0]);
+		printf("\n\n\n\nDevice Name: %s\n\n\n\n", name_str);
+
+		reply = dbus_message_new_method_return(msg);
+		dbus_message_iter_init_append(reply,&parameters);
+
+		if(!dbus_message_iter_append_basic(&parameters,DBUS_TYPE_STRING,&name_str))
+			daemon_kill(daemon,"dbus: Out Of Memory!\n");
+		dbus_uint32_t serial = 0;
+		if(!dbus_connection_send(daemon->dbus,reply,&serial))
+			daemon_kill(daemon,"dbus: Out Of Memory!\n");
+		dbus_connection_flush(daemon->dbus);
+		free(name_str);
+	}
+	else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon", "raw_keyboard_brightness"))
+	{
+		int brightness=0;
+		reply = dbus_message_new_method_return(msg);
+
+		if(dbus_message_iter_init(msg, &parameters))
+		{
+			if(dbus_message_iter_get_arg_type(&parameters) == DBUS_TYPE_BYTE)
+			{
+				dbus_message_iter_get_basic(&parameters,&brightness);
+			}
+			dbus_message_iter_init_append(reply,&parameters);
+			#ifdef USE_DEBUGGING
+				printf("\ndbus: setting brightness to: %d\n", brightness);
+			#endif
+
+			/*char *device_path = str_CreateEmpty();
+			device_path = str_CatFree(device_path, daemon->chroma->device_path);
+			device_path = str_CatFree(device_path, "/set_brightness");
+
+			#ifdef USE_DEBUGGING
+				printf("Device path: %s\n", device_path);
+			#endif
+
+			char buf[32];
+			sprintf(buf, "%d", brightness);
+			write_to_device_file(device_path, buf, strlen(buf));
+			free(device_path);
+			*/
+			razer_set_brightness(daemon->chroma,brightness);
+
+		}
+		dbus_uint32_t serial = 0;
+		if(!dbus_connection_send(daemon->dbus,reply,&serial))
+			daemon_kill(daemon,"dbus: Out Of Memory!\n");
+		dbus_connection_flush(daemon->dbus);
+	}
+	else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon", "set_game_mode"))
+	{
+		int enable=0;
+		reply = dbus_message_new_method_return(msg);
+
+		if(dbus_message_iter_init(msg, &parameters))
+		{
+			if(dbus_message_iter_get_arg_type(&parameters) == DBUS_TYPE_BYTE)
+			{
+				dbus_message_iter_get_basic(&parameters,&enable);
+			}
+			dbus_message_iter_init_append(reply,&parameters);
+			#ifdef USE_DEBUGGING
+				printf("\ndbus: setting game mode to: %d\n", enable);
+			#endif
+
+			/*char *device_path = str_CreateEmpty();
+			device_path = str_CatFree(device_path, daemon->chroma->device_path);
+			device_path = str_CatFree(device_path, "/mode_game");
+
+			#ifdef USE_DEBUGGING
+				printf("Device path: %s\n", device_path);
+			#endif
+
+			char buf[32];
+			sprintf(buf, "%d", enable);
+			write_to_device_file(device_path, buf, strlen(buf));
+			free(device_path);
+			*/
+			razer_set_game_mode(daemon->chroma,enable);
+
+		}
+		dbus_uint32_t serial = 0;
+		if(!dbus_connection_send(daemon->dbus,reply,&serial))
+			daemon_kill(daemon,"dbus: Out Of Memory!\n");
+		dbus_connection_flush(daemon->dbus);
+	}
+	else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.driver_effect", "custom"))
+	{
+		#ifdef USE_DEBUGGING
+			printf("\ndbus: method driver_effect.custom called\n");
+		#endif
+		/*	
+		char *device_path = str_CreateEmpty();
+		device_path = str_CatFree(device_path, daemon->chroma->device_path);
+		device_path = str_CatFree(device_path, "/mode_custom");
+
+		#ifdef USE_DEBUGGING
+			printf("Device path: %s\n", device_path);
+		#endif
+
+		write_to_device_file(device_path, "1", 1);
+		free(device_path);
+		*/
+		daemon->is_paused = 1;
+		razer_set_custom_mode(daemon->chroma);
+
+		reply = dbus_message_new_method_return(msg);
+ 		dbus_uint32_t serial = 0;
+ 		if(!dbus_connection_send(daemon->dbus,reply,&serial))
+			daemon_kill(daemon,"dbus: Out Of Memory!\n");
+		dbus_connection_flush(daemon->dbus);
+	}	
+	else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.driver_effect", "set_key_row"))
+	{
+		#ifdef USE_DEBUGGING
+			printf("\ndbus: method set_key_row called\n");
+		#endif
+				
+		char *dbus_array; // Shouldn't have to free this as DBUS "should" do it
+		int num_elements;
+		/*
+		char *device_path = str_CreateEmpty();
+		device_path = str_CatFree(device_path, daemon->chroma->device_path);
+		device_path = str_CatFree(device_path, "/set_key_row");
+
+		#ifdef USE_DEBUGGING
+			printf("Device path: %s\n", device_path);
+		#endif
+		*/
+
+		reply = dbus_message_new_method_return(msg);
+		if(dbus_message_iter_init(msg, &parameters))
+		{
+			if(dbus_message_iter_get_arg_type(&parameters) == DBUS_TYPE_ARRAY)
+			{
+				int element_type = dbus_message_iter_get_element_type (&parameters);
+				if(element_type == DBUS_TYPE_BYTE) 
+				{
+					DBusMessageIter iter_sub;
+					dbus_message_iter_recurse(&parameters, &iter_sub);
+					dbus_message_iter_get_fixed_array (&iter_sub, &dbus_array, &num_elements);
+					#ifdef USE_DEBUGGING
+						printf("\ndbus-array: Number of elements %d\n", num_elements);
+						printf("\ndbus-array: Elements 1,2,3,4 %u,%u,%u,%u\n", dbus_array[0] & 0xFF, dbus_array[1] & 0xFF, dbus_array[2] & 0xFF, dbus_array[3] & 0xFF);
+					#endif
+				}
+			}
+			dbus_message_iter_init_append(reply,&parameters);
+			if(num_elements % 67 == 0 || num_elements % 46 == 0)// 67 Is standard packet size which the driver accepts. 1 BYTE row id, 22 RBG (3xBYTE) [firefly takes 46 bytes including index]
+			{
+				daemon->is_paused = 1;
+			    //write_to_device_file(device_path, dbus_array, num_elements);
+			    razer_set_led_row_buffered(daemon->chroma,(unsigned char*)dbus_array,num_elements);
+		    }
+			//free(device_path);
+		}
+		dbus_uint32_t serial = 0;
+		if(!dbus_connection_send(daemon->dbus,reply,&serial))
+			daemon_kill(daemon,"dbus: Out Of Memory!\n");
+		dbus_connection_flush(daemon->dbus);
+	}
+	else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.driver_effect", "none"))
+	{
+		#ifdef USE_DEBUGGING
+			printf("\ndbus: method enable_macro_keys called\n");
+		#endif
+
+		/*char *device_path = str_CreateEmpty();
+		device_path = str_CatFree(device_path, daemon->chroma->device_path);
+		device_path = str_CatFree(device_path, "/mode_none");
+
+		#ifdef USE_DEBUGGING
+			printf("Device path: %s\n", device_path);
+		#endif
+
+		write_to_device_file(device_path, "1", 1);
+		free(device_path);
+		*/
+		razer_set_none_mode(daemon->chroma);
+		daemon->is_paused = 1;
+
+
+		reply = dbus_message_new_method_return(msg);
+ 		dbus_uint32_t serial = 0;
+ 		if(!dbus_connection_send(daemon->dbus,reply,&serial))
+			daemon_kill(daemon,"dbus: Out Of Memory!\n");
+		dbus_connection_flush(daemon->dbus);
+	}
+	else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.driver_effect", "static"))
+	{
+		struct razer_rgb color;
+		/*unsigned char red=0;
+		unsigned char green=0;
+		unsigned char blue=0;
+		*/
+		reply = dbus_message_new_method_return(msg);
+
+		if(dbus_message_iter_init(msg, &parameters))
+		{
+			if(dbus_message_iter_get_arg_type(&parameters) == DBUS_TYPE_BYTE)
+			{
+				dbus_message_iter_get_basic(&parameters,&color.r);
+			}
+			dbus_message_iter_next(&parameters);
+			if(dbus_message_iter_get_arg_type(&parameters) == DBUS_TYPE_BYTE)
+			{
+				dbus_message_iter_get_basic(&parameters,&color.g);
+			}
+			dbus_message_iter_next(&parameters);
+			if(dbus_message_iter_get_arg_type(&parameters) == DBUS_TYPE_BYTE)
+			{
+				dbus_message_iter_get_basic(&parameters,&color.b);
+			}
+			dbus_message_iter_init_append(reply,&parameters);
+
+			#ifdef USE_DEBUGGING
+				printf("\ndbus: method set mode static called\n");
+			#endif
+
+			/*char *device_path = str_CreateEmpty();
+			device_path = str_CatFree(device_path, daemon->chroma->device_path);
+			device_path = str_CatFree(device_path, "/mode_static");
+
+			#ifdef USE_DEBUGGING
+				printf("Device path: %s -  R: %d, G: %d, B: %d\n", device_path, red, green, blue);
+			#endif
+
+			char buf[3] = {red, green, blue};
+			write_to_device_file(device_path, buf, 3);
+			free(device_path);
+			*/
+			razer_set_static_mode(daemon->chroma,&color);
+			daemon->is_paused = 1;
+		}
+ 		dbus_uint32_t serial = 0;
+ 		if(!dbus_connection_send(daemon->dbus,reply,&serial))
+			daemon_kill(daemon,"dbus: Out Of Memory!\n");
+		dbus_connection_flush(daemon->dbus);
+	}
+	else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.driver_effect", "breath"))
+	{
+		/*char *device_path = str_CreateEmpty();
+		device_path = str_CatFree(device_path, daemon->chroma->device_path);
+		device_path = str_CatFree(device_path, "/mode_breath");
+
+		unsigned char red=0;
+		unsigned char green=0;
+		unsigned char blue=0;
+		unsigned char red2=0;
+		unsigned char green2=0;
+		unsigned char blue2=0;
+		unsigned char bytes=3;
+		*/
+		struct razer_rgb first_color;
+		struct razer_rgb second_color;
+		int colors = 0;
+		reply = dbus_message_new_method_return(msg);
+
+		if(dbus_message_iter_init(msg, &parameters))
+		{
+			if(dbus_message_iter_get_arg_type(&parameters) == DBUS_TYPE_BYTE)
+			{
+				dbus_message_iter_get_basic(&parameters,&first_color.r);
+				colors++;
+			}
+			dbus_message_iter_next(&parameters);
+			if(dbus_message_iter_get_arg_type(&parameters) == DBUS_TYPE_BYTE)
+			{
+				dbus_message_iter_get_basic(&parameters,&first_color.g);
+				colors++;
+			}
+			dbus_message_iter_next(&parameters);
+			if(dbus_message_iter_get_arg_type(&parameters) == DBUS_TYPE_BYTE)
+			{
+				dbus_message_iter_get_basic(&parameters,&first_color.b);
+				colors++;
+			}
+
+			/*#ifdef USE_DEBUGGING
+				printf("Device path: %s -  R: %d, G: %d, B: %d\n", device_path, red, green, blue);
+			#endif
+			*/
+
+			//char buf[6] = {red, green, blue, 0, 0, 0};
+
+			if(dbus_message_iter_has_next(&parameters)) // If breathing 2 colour mode
+			{
+				//bytes=6;
+				dbus_message_iter_next(&parameters);
+				if(dbus_message_iter_get_arg_type(&parameters) == DBUS_TYPE_BYTE)
+				{
+					dbus_message_iter_get_basic(&parameters,&second_color.r);
+					colors++;
+				}
+				dbus_message_iter_next(&parameters);
+				if(dbus_message_iter_get_arg_type(&parameters) == DBUS_TYPE_BYTE)
+				{
+					dbus_message_iter_get_basic(&parameters,&second_color.g);
+					colors++;
+				}
+				dbus_message_iter_next(&parameters);
+				if(dbus_message_iter_get_arg_type(&parameters) == DBUS_TYPE_BYTE)
+				{
+					dbus_message_iter_get_basic(&parameters,&second_color.b);
+					colors++;
+				}
+
+				/*#ifdef USE_DEBUGGING
+					printf("Device path: %s -  R: %d, G: %d, B: %d, R2: %d, G2: %d, B2: %d \n", device_path, red, green, blue, red2, green2, blue2);
+				#endif
+				buf[3] = red2;
+				buf[4] = green2;
+				buf[5] = blue2;
+				*/
+			}
+
+			dbus_message_iter_init_append(reply,&parameters);
+			#ifdef USE_DEBUGGING
+				printf("\ndbus: method set mode breath called\n");
+			#endif
+			daemon->is_paused = 1;
+			//write_to_device_file(device_path, buf, bytes);
+			switch(colors)
+			{
+				case 3:
+					razer_set_one_color_breath_mode(daemon->chroma,&first_color);
+					break;
+				case 6:
+					razer_set_breath_mode(daemon->chroma,&first_color,&second_color);
+					break;
+				default:
+					razer_set_random_breath_mode(daemon->chroma);
+					break;
+			}
+		} 
+		else
+		{
+			/*char *device_path = str_CreateEmpty();
+			device_path = str_CatFree(device_path, daemon->chroma->device_path);
+			device_path = str_CatFree(device_path, "/mode_breath");
+
+			#ifdef USE_DEBUGGING
+				printf("Device path: %s -  Random breathing mode\n", device_path);
+			#endif
+			*/
+			daemon->is_paused = 1;
+			// Writing any bytes as long as its not 3 or 6 will trigger random breathing mode
+			//write_to_device_file(device_path, "1", 1);
+			razer_set_random_breath_mode(daemon->chroma);
+		}
+
+		//free(device_path);
+ 		dbus_uint32_t serial = 0;
+ 		if(!dbus_connection_send(daemon->dbus,reply,&serial))
+			daemon_kill(daemon,"dbus: Out Of Memory!\n");
+		dbus_connection_flush(daemon->dbus);
+	}
+	else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.driver_effect", "reactive"))
+	{
+		unsigned char speed=3;
+		/*unsigned char red=255;
+		unsigned char green=0;
+		unsigned char blue=0;
+		*/
+		struct razer_rgb color;
+		reply = dbus_message_new_method_return(msg);
+
+		if(dbus_message_iter_init(msg, &parameters))
+		{
+			if(dbus_message_iter_get_arg_type(&parameters) == DBUS_TYPE_BYTE)
+			{
+				dbus_message_iter_get_basic(&parameters,&speed);
+			}
+			dbus_message_iter_next(&parameters);
+			if(dbus_message_iter_get_arg_type(&parameters) == DBUS_TYPE_BYTE)
+			{
+				dbus_message_iter_get_basic(&parameters,&color.r);
+			}
+			dbus_message_iter_next(&parameters);
+			if(dbus_message_iter_get_arg_type(&parameters) == DBUS_TYPE_BYTE)
+			{
+				dbus_message_iter_get_basic(&parameters,&color.g);
+			}
+			dbus_message_iter_next(&parameters);
+			if(dbus_message_iter_get_arg_type(&parameters) == DBUS_TYPE_BYTE)
+			{
+				dbus_message_iter_get_basic(&parameters,&color.b);
+			}
+
+			dbus_message_iter_init_append(reply,&parameters);
+
+			#ifdef USE_DEBUGGING
+				printf("\ndbus: method set mode reactive called\n");
+			#endif
+
+			/*char *device_path = str_CreateEmpty();
+			device_path = str_CatFree(device_path, daemon->chroma->device_path);
+			device_path = str_CatFree(device_path, "/mode_reactive");
+
+			#ifdef USE_DEBUGGING
+				printf("Device path: %s -  R: %d, G: %d, B: %d, Speed: %d\n", device_path, red, green, blue, speed);
+			#endif
+				
+			char buf[4] = {speed, red, green, blue};
+			write_to_device_file(device_path, buf, 4);
+			free(device_path);
+			*/
+			daemon->is_paused = 1;
+			razer_set_reactive_mode(daemon->chroma,speed,&color);
+
+		}
+ 		dbus_uint32_t serial = 0;
+ 		if(!dbus_connection_send(daemon->dbus,reply,&serial))
+			daemon_kill(daemon,"dbus: Out Of Memory!\n");
+		dbus_connection_flush(daemon->dbus);
+	}
+	else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.driver_effect", "wave"))
+	{
+		unsigned char direction=0;
+		// None = 0
+		// Right = 1
+		// Left = 2
+		reply = dbus_message_new_method_return(msg);
+
+		if(dbus_message_iter_init(msg, &parameters))
+		{
+			if(dbus_message_iter_get_arg_type(&parameters) == DBUS_TYPE_BYTE)
+			{
+				dbus_message_iter_get_basic(&parameters,&direction);
+			}
+
+			dbus_message_iter_init_append(reply,&parameters);
+
+			#ifdef USE_DEBUGGING
+				printf("\ndbus: method set mode wave called\n");
+			#endif
+
+			/*char *device_path = str_CreateEmpty();
+			device_path = str_CatFree(device_path, daemon->chroma->device_path);
+			device_path = str_CatFree(device_path, "/mode_wave");
+			#ifdef USE_DEBUGGING
+				if(direction == 0)
+				{
+					printf("Device path: %s -  Direction None\n", device_path);
+				} 
+				else if(direction == 1)
+				{
+					printf("Device path: %s -  Direction Right\n", device_path);
+				} 
+				else if(direction == 2)
+				{
+					printf("Device path: %s -  Direction Left\n", device_path);
+				}
+				else 
+				{
+					printf("Device path: %s -  Direction Unknown\n", device_path);
+				}
+			#endif
+			char buf[32];
+			sprintf(buf, "%d", direction);
+			write_to_device_file(device_path, buf, strlen(buf));
+			free(device_path);
+			*/
+			daemon->is_paused = 1;
+			razer_set_wave_mode(daemon->chroma,direction);
+		}
+ 		dbus_uint32_t serial = 0;
+ 		if(!dbus_connection_send(daemon->dbus,reply,&serial))
+			daemon_kill(daemon,"dbus: Out Of Memory!\n");
+		dbus_connection_flush(daemon->dbus);
+	}
+	else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.driver_effect", "spectrum"))
+	{
+		#ifdef USE_DEBUGGING
+			printf("\ndbus: method spectrum called\n");
+		#endif
+
+		/*char *device_path = str_CreateEmpty();
+		device_path = str_CatFree(device_path, daemon->chroma->device_path);
+		device_path = str_CatFree(device_path, "/mode_spectrum");
+
+		#ifdef USE_DEBUGGING
+			printf("Device path: %s\n", device_path);
+		#endif
+
+		write_to_device_file(device_path, "1", 1);
+		free(device_path);
+		*/
+		daemon->is_paused = 1;
+		razer_set_spectrum_mode(daemon->chroma);
+		reply = dbus_message_new_method_return(msg);
+ 		dbus_uint32_t serial = 0;
+ 		if(!dbus_connection_send(daemon->dbus,reply,&serial))
+			daemon_kill(daemon,"dbus: Out Of Memory!\n");
+		dbus_connection_flush(daemon->dbus);
+	}
+	else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.driver_effect", "starlight"))
+	{
+		#ifdef USE_DEBUGGING
+			printf("\ndbus: method starlight called\n");
+		#endif
+
+		daemon->is_paused = 1;
+		razer_set_starlight_mode(daemon->chroma);
+		reply = dbus_message_new_method_return(msg);
+ 		dbus_uint32_t serial = 0;
+ 		if(!dbus_connection_send(daemon->dbus,reply,&serial))
+			daemon_kill(daemon,"dbus: Out Of Memory!\n");
+		dbus_connection_flush(daemon->dbus);
+	}
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_nodes", "list")) 
 	{
 		#ifdef USE_DEBUGGING
 			printf("\ndbus: method list render_nodes called\n");
@@ -204,40 +861,103 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 		dbus_connection_flush(daemon->dbus);
 		free(rn_list_json);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_nodes", "render_list")) 
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.devices", "list")) 
 	{
+		char **path = NULL;
+		int device_uid = 0;
+		dbus_message_get_path_decomposed(msg,&path);
+		#ifdef USE_DEBUGGING
+			printf("\ndbus: method list devices called\n");
+		#endif
+		reply = dbus_message_new_method_return(msg);
+		dbus_message_iter_init_append(reply,&parameters);
+		if(path[0] != NULL)
+			device_uid = atoi(path[0]);
+		struct razer_chroma_device *device = daemon_get_device(daemon,device_uid);
+		if(device)
+		{
+			struct razer_daemon_device_data *device_data = (struct razer_daemon_device_data*)device->tag;
+			char *rn_list_json = str_CreateEmpty();
+			rn_list_json = str_CatFree(rn_list_json,"{\n");
+			rn_list_json = str_CatFree(rn_list_json," \"render_nodes_num\" : ");
+			char *rn_num_string = str_FromLong(list_GetLen(device_data->render_nodes));
+			rn_list_json = str_CatFree(rn_list_json,rn_num_string);
+			rn_list_json = str_CatFree(rn_list_json," ,\n");
+			free(rn_num_string);
+			rn_list_json = str_CatFree(rn_list_json," \"render_nodes_list\": [\n");
+			for(int i=0;i<list_GetLen(device_data->render_nodes);i++)
+			{
+				struct razer_fx_render_node *render_node = list_Get(device_data->render_nodes,i);
+				char *rn_json = daemon_render_node_to_json(render_node);
+				rn_list_json = str_CatFree(rn_list_json,rn_json);
+				free(rn_json);
+			}
+			rn_list_json = str_CatFree(rn_list_json,"]}\n");
+			if(!dbus_message_iter_append_basic(&parameters,DBUS_TYPE_STRING,&rn_list_json)) 
+				daemon_kill(daemon,"dbus: Out Of Memory!\n");
+	 		dbus_uint32_t serial = 0;
+ 			if(!dbus_connection_send(daemon->dbus,reply,&serial)) 
+				daemon_kill(daemon,"dbus: Out Of Memory!\n");
+			dbus_connection_flush(daemon->dbus);
+			free(rn_list_json);
+		}
+		else
+		{
+	 		dbus_uint32_t serial = 0;
+ 			if(!dbus_connection_send(daemon->dbus,reply,&serial)) 
+				daemon_kill(daemon,"dbus: Out Of Memory!\n");
+			dbus_connection_flush(daemon->dbus);
+		}
+	}
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.device.render_nodes", "render_list")) 
+	{
+		char **path = NULL;
+		int device_uid = 0;
+		dbus_message_get_path_decomposed(msg,&path);
 		#ifdef USE_DEBUGGING
 			printf("\ndbus: method list rendering render_nodes called\n");
 		#endif
 		reply = dbus_message_new_method_return(msg);
 		dbus_message_iter_init_append(reply,&parameters);
-		char *rn_list_json = str_CreateEmpty();
-		rn_list_json = str_CatFree(rn_list_json,"{\n");
-		rn_list_json = str_CatFree(rn_list_json," \"render_nodes_num\" : ");
-		char *rn_num_string = str_FromLong(list_GetLen(daemon->render_nodes));
-		rn_list_json = str_CatFree(rn_list_json,rn_num_string);
-		rn_list_json = str_CatFree(rn_list_json," ,\n");
-		free(rn_num_string);
-		rn_list_json = str_CatFree(rn_list_json," \"render_nodes_list\": [\n");
-		for(int i=0;i<list_GetLen(daemon->render_nodes);i++)
+		if(path[0] != NULL)
+			device_uid = atoi(path[0]);
+		struct razer_chroma_device *device = daemon_get_device(daemon,device_uid);
+		if(device)
 		{
-			struct razer_fx_render_node *render_node = list_Get(daemon->render_nodes,i);
-			char *rn_json = daemon_render_node_to_json(render_node);
-			rn_list_json = str_CatFree(rn_list_json,rn_json);
-			free(rn_json);
+			struct razer_daemon_device_data *device_data = (struct razer_daemon_device_data*)device->tag;
+			char *rn_list_json = str_CreateEmpty();
+			rn_list_json = str_CatFree(rn_list_json,"{\n");
+			rn_list_json = str_CatFree(rn_list_json," \"render_nodes_num\" : ");
+			char *rn_num_string = str_FromLong(list_GetLen(device_data->render_nodes));
+			rn_list_json = str_CatFree(rn_list_json,rn_num_string);
+			rn_list_json = str_CatFree(rn_list_json," ,\n");
+			free(rn_num_string);
+			rn_list_json = str_CatFree(rn_list_json," \"render_nodes_list\": [\n");
+			for(int i=0;i<list_GetLen(device_data->render_nodes);i++)
+			{
+				struct razer_fx_render_node *render_node = list_Get(device_data->render_nodes,i);
+				char *rn_json = daemon_render_node_to_json(render_node);
+				rn_list_json = str_CatFree(rn_list_json,rn_json);
+				free(rn_json);
+			}
+			rn_list_json = str_CatFree(rn_list_json,"]}\n");
+			if(!dbus_message_iter_append_basic(&parameters,DBUS_TYPE_STRING,&rn_list_json)) 
+				daemon_kill(daemon,"dbus: Out Of Memory!\n");
+	 		dbus_uint32_t serial = 0;
+ 			if(!dbus_connection_send(daemon->dbus,reply,&serial)) 
+				daemon_kill(daemon,"dbus: Out Of Memory!\n");
+			dbus_connection_flush(daemon->dbus);
+			free(rn_list_json);
 		}
-		rn_list_json = str_CatFree(rn_list_json,"]}\n");
-		if(!dbus_message_iter_append_basic(&parameters,DBUS_TYPE_STRING,&rn_list_json)) 
-			daemon_kill(daemon,"dbus: Out Of Memory!\n");
- 		dbus_uint32_t serial = 0;
- 		if(!dbus_connection_send(daemon->dbus,reply,&serial)) 
-			daemon_kill(daemon,"dbus: Out Of Memory!\n");
-		dbus_connection_flush(daemon->dbus);
-		free(rn_list_json);
+		else
+		{
+	 		dbus_uint32_t serial = 0;
+ 			if(!dbus_connection_send(daemon->dbus,reply,&serial)) 
+				daemon_kill(daemon,"dbus: Out Of Memory!\n");
+			dbus_connection_flush(daemon->dbus);
+		}
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.parameters", "list")) 
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.parameters", "list")) 
 	{
 		char **path = NULL;
 		int rn_uid = -1;
@@ -263,7 +983,14 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			rn_list_json = str_CatFree(rn_list_json," \"parameters_list\": [\n");
 			for(int i=0;i<render_node->effect->parameters->num;i++)
 			{
-				char *rn_json = daemon_parameter_to_json(render_node->effect->parameters->items[i]);
+				char *rn_json;
+				if(i == render_node->effect->parameters->num - 1)
+				{
+					rn_json = daemon_parameter_to_json(render_node->effect->parameters->items[i], 1);
+				} else {
+					rn_json = daemon_parameter_to_json(render_node->effect->parameters->items[i], 0);
+				}
+
 				rn_list_json = str_CatFree(rn_list_json,rn_json);
 				free(rn_json);
 			}
@@ -277,8 +1004,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 		dbus_connection_flush(daemon->dbus);
 		free(rn_list_json);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.parameter", "get"))
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.parameter", "get"))
 	{
 		char **path = NULL;
 		int rn_uid = -1;
@@ -322,7 +1048,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 				}
 				else
 				{
-					char *parameter_json = daemon_parameter_to_json(parameter);
+					char *parameter_json = daemon_parameter_to_json(parameter, 1);
 					rn_list_json = str_CatFree(rn_list_json,parameter_json);
 					free(parameter_json);
 				}
@@ -336,8 +1062,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 		dbus_connection_flush(daemon->dbus);
 		free(rn_list_json);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.parameter", "set"))
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.parameter", "set"))
 	{
 		char **path = NULL;
 		int rn_uid = -1;
@@ -377,11 +1102,12 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 					case RAZER_PARAMETER_TYPE_STRING:
 						if(dbus_message_iter_get_arg_type(&parameters) == DBUS_TYPE_STRING)
 						{
-							char *fxname;
-							dbus_message_iter_get_basic(&parameters,&fxname);
+							char *value;
+							dbus_message_iter_get_basic(&parameters,&value);
 							#ifdef USE_DEBUGGING
-								printf("dbus: string parameter:%s\n",fxname);
+								printf("dbus: string parameter:%s\n",value);
 							#endif
+							daemon_set_parameter_string(parameter,str_Copy(value));
 						}
 						break;
 					case RAZER_PARAMETER_TYPE_FLOAT:
@@ -787,10 +1513,10 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			daemon_kill(daemon,"dbus: Out Of Memory!\n");
 		dbus_connection_flush(daemon->dbus);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node", "create"))
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node", "create"))
 	{
 		int fx_uid=0;
+		int device_uid = 0;
 		char *name = NULL;
 		char *description = NULL;
 		reply = dbus_message_new_method_return(msg);
@@ -800,6 +1526,11 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			if(dbus_message_iter_get_arg_type(&parameters) == DBUS_TYPE_INT32)
 			{
 				dbus_message_iter_get_basic(&parameters,&fx_uid);
+			}
+			dbus_message_iter_next(&parameters);
+			if(dbus_message_iter_get_arg_type(&parameters) == DBUS_TYPE_INT32)
+			{
+				dbus_message_iter_get_basic(&parameters,&device_uid);
 			}
 			dbus_message_iter_next(&parameters);
 			if(dbus_message_iter_get_arg_type(&parameters) == DBUS_TYPE_STRING)
@@ -812,28 +1543,32 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 				dbus_message_iter_get_basic(&parameters,&description);
 			}
 
-			if(fx_uid && description && name)
+			if(device_uid && fx_uid && description && name)
 			{
 				dbus_message_iter_init_append(reply,&parameters);
-				struct razer_fx_render_node *rn = daemon_create_render_node(daemon,daemon_get_effect(daemon,fx_uid),-1,-1,-1,name,description);
-				daemon_register_render_node(daemon,rn);
-				#ifdef USE_DEBUGGING
-					printf("\ndbus: created render_node:%d\n",rn->id);
-				#endif
-				/*char *rn_uid_json = str_CreateEmpty();
-				rn_uid_json = str_CatFree(rn_uid_json,"{\n");
-				rn_uid_json = str_CatFree(rn_uid_json," \"uid\" : ");
-				char *rn_uid_string = str_FromLong(rn->id);
-				rn_uid_json = str_CatFree(rn_uid_json,rn_uid_string);
-				rn_uid_json = str_CatFree(rn_uid_json,"\n");
-				free(rn_uid_string);
-				rn_uid_json = str_CatFree(rn_uid_json,"}\n");
-				if(!dbus_message_iter_append_basic(&parameters,DBUS_TYPE_STRING,&rn_uid_json)) 
-					daemon_kill(daemon,"dbus: Out Of Memory!\n");
-				free(rn_uid_json);
-				*/
-				if(!dbus_message_iter_append_basic(&parameters,DBUS_TYPE_INT32,&rn->id)) 
-					daemon_kill(daemon,"dbus: Out Of Memory!\n");
+				struct razer_chroma_device *device = daemon_get_device(daemon,device_uid);
+				if(device)
+				{
+					struct razer_fx_render_node *rn = daemon_create_render_node(device,daemon_get_effect(daemon,fx_uid),-1,-1,-1,name,description);
+					daemon_register_render_node(daemon,rn);
+					#ifdef USE_DEBUGGING
+						printf("\ndbus: created render_node:%d\n",rn->id);
+					#endif
+					/*char *rn_uid_json = str_CreateEmpty();
+					rn_uid_json = str_CatFree(rn_uid_json,"{\n");
+					rn_uid_json = str_CatFree(rn_uid_json," \"uid\" : ");
+					char *rn_uid_string = str_FromLong(rn->id);
+					rn_uid_json = str_CatFree(rn_uid_json,rn_uid_string);
+					rn_uid_json = str_CatFree(rn_uid_json,"\n");
+					free(rn_uid_string);
+					rn_uid_json = str_CatFree(rn_uid_json,"}\n");
+					if(!dbus_message_iter_append_basic(&parameters,DBUS_TYPE_STRING,&rn_uid_json)) 
+						daemon_kill(daemon,"dbus: Out Of Memory!\n");
+					free(rn_uid_json);
+					*/
+					if(!dbus_message_iter_append_basic(&parameters,DBUS_TYPE_INT32,&rn->id)) 
+						daemon_kill(daemon,"dbus: Out Of Memory!\n");
+				}
 			}
 		}
  		dbus_uint32_t serial = 0;
@@ -841,11 +1576,41 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			daemon_kill(daemon,"dbus: Out Of Memory!\n");
 		dbus_connection_flush(daemon->dbus);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node", "set"))
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node", "reset")) 
 	{
-		int rn_uid=0;
+		char **path = NULL;
+		int rn_uid = -1;
+		dbus_message_get_path_decomposed(msg,&path);
+		#ifdef USE_DEBUGGING
+			printf("\ndbus: method reset render_node called for : %s\n",path[0]);
+		#endif
 		reply = dbus_message_new_method_return(msg);
+		dbus_message_iter_init_append(reply,&parameters);
+		if(path[0] != NULL)
+			rn_uid = atoi(path[0]);
+		dbus_free_string_array(path);
+		struct razer_fx_render_node *render_node = daemon_get_render_node(daemon,rn_uid);
+		if(render_node)
+		{
+			//daemon_reset_render_node(daemon,render_node);
+			daemon_reset_render_node(render_node);
+		}
+ 		dbus_uint32_t serial = 0;
+ 		if(!dbus_connection_send(daemon->dbus,reply,&serial)) 
+			daemon_kill(daemon,"dbus: Out Of Memory!\n");
+		dbus_connection_flush(daemon->dbus);
+	}
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.device.default_render_node", "set"))
+	{
+		char **path = NULL;
+		int device_uid = 0;
+		int rn_uid=0;
+		dbus_message_get_path_decomposed(msg,&path);
+		if(path[0] != NULL)
+			device_uid = atoi(path[0]);
+		dbus_free_string_array(path);
+		reply = dbus_message_new_method_return(msg);
+		struct razer_chroma_device *device = daemon_get_device(daemon,device_uid);
 
 		if(dbus_message_iter_init(msg, &parameters))
 		{
@@ -853,16 +1618,17 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			{
 				dbus_message_iter_get_basic(&parameters,&rn_uid);
 			}
-			if(rn_uid)
+			if(rn_uid && device)
 			{
+				struct razer_daemon_device_data *device_data = (struct razer_daemon_device_data*)device->tag;
 				dbus_message_iter_init_append(reply,&parameters);
 				struct razer_fx_render_node *rn = daemon_get_render_node(daemon,rn_uid);
 				#ifdef USE_DEBUGGING
-					printf("\ndbus: setting render_node to: %d (@%x)\n",rn_uid,rn);
+					printf("\ndbus: setting default render_node to: %d (@%x)\n",rn_uid,rn);
 					//fflush(stdout);
 				#endif
 				if(rn)
-					daemon->render_node = rn;
+					device_data->default_render_node = rn;
 			}
 		}
  		dbus_uint32_t serial = 0;
@@ -870,8 +1636,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			daemon_kill(daemon,"dbus: Out Of Memory!\n");
 		dbus_connection_flush(daemon->dbus);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.opacity", "set"))
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.opacity", "set"))
 	{
 		char **path = NULL;
 		dbus_message_get_path_decomposed(msg,&path);
@@ -903,8 +1668,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			daemon_kill(daemon,"dbus: Out Of Memory!\n");
 		dbus_connection_flush(daemon->dbus);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.opacity", "get"))
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.opacity", "get"))
 	{
 		char **path = NULL;
 		dbus_message_get_path_decomposed(msg,&path);
@@ -930,8 +1694,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			daemon_kill(daemon,"dbus: Out Of Memory!\n");
 		dbus_connection_flush(daemon->dbus);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.input", "connect"))
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.input", "connect"))
 	{
 		char **path = NULL;
 		dbus_message_get_path_decomposed(msg,&path);
@@ -959,7 +1722,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 				#ifdef USE_DEBUGGING
 					printf("dbus: connecting input frame buffer to render_node : %d (@%x) to %d (@%x)\n",rn_uid,rn,dst_rn_uid,dst_rn);
 				#endif
-				daemon_connect_input(daemon,rn,dst_rn);
+				daemon_connect_input(rn,dst_rn);
 			}
 		}
  		dbus_uint32_t serial = 0;
@@ -967,8 +1730,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			daemon_kill(daemon,"dbus: Out Of Memory!\n");
 		dbus_connection_flush(daemon->dbus);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.second_input", "connect"))
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.second_input", "connect"))
 	{
 		char **path = NULL;
 		dbus_message_get_path_decomposed(msg,&path);
@@ -996,7 +1758,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 				#ifdef USE_DEBUGGING
 					printf("dbus: connecting second input frame buffer to render_node : %d (@%x) to %d (@%x)\n",rn_uid,rn,dst_rn_uid,dst_rn);
 				#endif
-				daemon_connect_second_input(daemon,rn,dst_rn);
+				daemon_connect_second_input(rn,dst_rn);
 			}
 		}
  		dbus_uint32_t serial = 0;
@@ -1004,8 +1766,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			daemon_kill(daemon,"dbus: Out Of Memory!\n");
 		dbus_connection_flush(daemon->dbus);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.next", "set"))
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.next", "set"))
 	{
 		char **path = NULL;
 		dbus_message_get_path_decomposed(msg,&path);
@@ -1043,8 +1804,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			daemon_kill(daemon,"dbus: Out Of Memory!\n");
 		dbus_connection_flush(daemon->dbus);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.next", "get"))
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.next", "get"))
 	{
 		char **path = NULL;
 		dbus_message_get_path_decomposed(msg,&path);
@@ -1073,8 +1833,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			daemon_kill(daemon,"dbus: Out Of Memory!\n");
 		dbus_connection_flush(daemon->dbus);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.next.move_frame_buffer_linkage", "set"))
+	else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.next.move_frame_buffer_linkage", "set"))
 	{
 		char **path = NULL;
 		dbus_message_get_path_decomposed(msg,&path);
@@ -1106,8 +1865,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			daemon_kill(daemon,"dbus: Out Of Memory!\n");
 		dbus_connection_flush(daemon->dbus);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.next.move_frame_buffer_linkage", "get"))
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.next.move_frame_buffer_linkage", "get"))
 	{
 		char **path = NULL;
 		dbus_message_get_path_decomposed(msg,&path);
@@ -1132,8 +1890,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			daemon_kill(daemon,"dbus: Out Of Memory!\n");
 		dbus_connection_flush(daemon->dbus);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.parent", "get"))
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.parent", "get"))
 	{
 		char **path = NULL;
 		dbus_message_get_path_decomposed(msg,&path);
@@ -1161,8 +1918,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			daemon_kill(daemon,"dbus: Out Of Memory!\n");
 		dbus_connection_flush(daemon->dbus);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.limit_render_time_ms", "set"))
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.limit_render_time_ms", "set"))
 	{
 		char **path = NULL;
 		dbus_message_get_path_decomposed(msg,&path);
@@ -1194,8 +1950,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			daemon_kill(daemon,"dbus: Out Of Memory!\n");
 		dbus_connection_flush(daemon->dbus);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.subs", "list")) 
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.subs", "list")) 
 	{
 		char **path = NULL;
 		int rn_uid = -1;
@@ -1240,8 +1995,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 		dbus_connection_flush(daemon->dbus);
 		free(rn_list_json);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.sub", "add"))
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.render_node.sub", "add"))
 	{
 		char **path = NULL;
 		int rn_uid = -1;
@@ -1282,11 +2036,19 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			daemon_kill(daemon,"dbus: Out Of Memory!\n");
 		dbus_connection_flush(daemon->dbus);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.frame_buffer", "connect"))
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.device.frame_buffer", "connect"))
 	{
+		char **path = NULL;
+		int device_uid = 0;
 		int rn_uid=0;
+		dbus_message_get_path_decomposed(msg,&path);
+		if(path[0] != NULL)
+			device_uid = atoi(path[0]);
+		dbus_free_string_array(path);
 		reply = dbus_message_new_method_return(msg);
+
+		struct razer_chroma_device *device = daemon_get_device(daemon,device_uid);
+		//struct razer_daemon_device_data *device_data = (struct razer_daemon_device_data*)device->tag;
 
 		if(dbus_message_iter_init(msg, &parameters))
 		{
@@ -1294,14 +2056,14 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			{
 				dbus_message_iter_get_basic(&parameters,&rn_uid);
 			}
-			if(rn_uid)
+			if(rn_uid && device)
 			{
 				dbus_message_iter_init_append(reply,&parameters);
 				struct razer_fx_render_node *rn = daemon_get_render_node(daemon,rn_uid);
 				#ifdef USE_DEBUGGING
 					printf("\ndbus: connecting output frame buffer to render_node to: %d (@%x)\n",rn_uid,rn);
 				#endif
-				daemon_connect_frame_buffer(daemon,rn);
+				daemon_connect_frame_buffer(device,rn);
 			}
 		}
  		dbus_uint32_t serial = 0;
@@ -1309,44 +2071,61 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			daemon_kill(daemon,"dbus: Out Of Memory!\n");
 		dbus_connection_flush(daemon->dbus);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.frame_buffer", "disconnect"))
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.device.frame_buffer", "disconnect"))
 	{
+		char **path = NULL;
+		int device_uid = 0;
+		dbus_message_get_path_decomposed(msg,&path);
+		if(path[0] != NULL)
+			device_uid = atoi(path[0]);
+		dbus_free_string_array(path);
 		reply = dbus_message_new_method_return(msg);
-		daemon_disconnect_frame_buffer(daemon);
+		struct razer_chroma_device *device = daemon_get_device(daemon,device_uid);
+		//struct razer_daemon_device_data *device_data = (struct razer_daemon_device_data*)device->tag;
+		if(device)
+			daemon_disconnect_frame_buffer(device);
  		dbus_uint32_t serial = 0;
  		if(!dbus_connection_send(daemon->dbus,reply,&serial)) 
 			daemon_kill(daemon,"dbus: Out Of Memory!\n");
 		dbus_connection_flush(daemon->dbus);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.frame_buffer", "get")) 
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.device.frame_buffer", "get")) 
 	{
+		char **path = NULL;
+		int device_uid = 0;
+		dbus_message_get_path_decomposed(msg,&path);
 		#ifdef USE_DEBUGGING
 			printf("\ndbus: method get frame_buffer called\n");
 		#endif
+		if(path[0] != NULL)
+			device_uid = atoi(path[0]);
+		dbus_free_string_array(path);
 		reply = dbus_message_new_method_return(msg);
-		dbus_message_iter_init_append(reply,&parameters);
-		/*char *rn_uid_json = str_CreateEmpty();
-		rn_uid_json = str_CatFree(rn_uid_json,"{\n");
-		rn_uid_json = str_CatFree(rn_uid_json," \"uid\" : ");
-		char *rn_uid_string = str_FromLong(daemon->frame_buffer_linked_uid);
-		rn_uid_json = str_CatFree(rn_uid_json,rn_uid_string);
-		rn_uid_json = str_CatFree(rn_uid_json,"\n");
-		free(rn_uid_string);
-		rn_uid_json = str_CatFree(rn_uid_json,"}\n");
-		if(!dbus_message_iter_append_basic(&parameters,DBUS_TYPE_STRING,&rn_uid_json)) 
-			daemon_kill(daemon,"dbus: Out Of Memory!\n");
-		free(rn_uid_json);*/
-		if(!dbus_message_iter_append_basic(&parameters,DBUS_TYPE_INT32,&daemon->frame_buffer_linked_uid)) 
-			daemon_kill(daemon,"dbus: Out Of Memory!\n");
+		struct razer_chroma_device *device = daemon_get_device(daemon,device_uid);
+		if(device)
+		{
+			struct razer_daemon_device_data *device_data = (struct razer_daemon_device_data*)device->tag;
+			dbus_message_iter_init_append(reply,&parameters);
+			/*char *rn_uid_json = str_CreateEmpty();
+			rn_uid_json = str_CatFree(rn_uid_json,"{\n");
+			rn_uid_json = str_CatFree(rn_uid_json," \"uid\" : ");
+			char *rn_uid_string = str_FromLong(daemon->frame_buffer_linked_uid);
+			rn_uid_json = str_CatFree(rn_uid_json,rn_uid_string);
+			rn_uid_json = str_CatFree(rn_uid_json,"\n");
+			free(rn_uid_string);
+			rn_uid_json = str_CatFree(rn_uid_json,"}\n");
+			if(!dbus_message_iter_append_basic(&parameters,DBUS_TYPE_STRING,&rn_uid_json)) 
+				daemon_kill(daemon,"dbus: Out Of Memory!\n");
+			free(rn_uid_json);*/
+			if(!dbus_message_iter_append_basic(&parameters,DBUS_TYPE_INT32,&device_data->frame_buffer_linked_uid)) 
+				daemon_kill(daemon,"dbus: Out Of Memory!\n");
+		}
 		dbus_uint32_t serial = 0;
  		if(!dbus_connection_send(daemon->dbus,reply,&serial)) 
 			daemon_kill(daemon,"dbus: Out Of Memory!\n");
 		dbus_connection_flush(daemon->dbus);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon", "pause")) 
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon", "pause")) 
 	{
 		#ifdef USE_DEBUGGING
 			printf("\ndbus: method pause called\n");
@@ -1358,8 +2137,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			daemon_kill(daemon,"dbus: Out Of Memory!\n");
 		dbus_connection_flush(daemon->dbus);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon", "continue")) 
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon", "continue")) 
 	{
 		#ifdef USE_DEBUGGING
 			printf("\ndbus: method continue called\n");
@@ -1371,8 +2149,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			daemon_kill(daemon,"dbus: Out Of Memory!\n");
 		dbus_connection_flush(daemon->dbus);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.fps", "set")) 
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.fps", "set")) 
 	{
 		#ifdef USE_DEBUGGING
 			printf("\ndbus: method set fps called\n");
@@ -1399,7 +2176,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			daemon_kill(daemon,"dbus: Out Of Memory!\n");
 		dbus_connection_flush(daemon->dbus);
 	}
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.fps", "get")) 
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.fps", "get")) 
 	{
 		#ifdef USE_DEBUGGING
 			printf("\ndbus: method get fps called\n");
@@ -1413,8 +2190,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			daemon_kill(daemon,"dbus: Out Of Memory!\n");
 		dbus_connection_flush(daemon->dbus);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon", "is_paused")) 
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon", "is_paused")) 
 	{
 		#ifdef USE_DEBUGGING
 			printf("\ndbus: method is_paused called\n");
@@ -1428,8 +2204,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			daemon_kill(daemon,"dbus: Out Of Memory!\n");
 		dbus_connection_flush(daemon->dbus);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.fx", "list")) 
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.fx", "list")) 
 	{
 		#ifdef USE_DEBUGGING
 			printf("\ndbus: method list fx called\n");
@@ -1444,10 +2219,17 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 		fx_list_json = str_CatFree(fx_list_json," ,\n");
 		free(effects_num_string);
 		fx_list_json = str_CatFree(fx_list_json," \"effects_list\": [\n");
-		for(int i=0;i<list_GetLen(daemon->effects);i++)
+		int list_length = list_GetLen(daemon->effects);
+		for(int i=0;i<list_length;i++)
 		{
 			struct razer_effect *effect = list_Get(daemon->effects,i);
-			char *effect_json = daemon_effect_to_json(effect);
+			char *effect_json;
+			if(i == list_length - 1)
+			{
+				effect_json = daemon_effect_to_json(effect, 1);
+			} else {
+				effect_json = daemon_effect_to_json(effect, 0);
+			}
 			fx_list_json = str_CatFree(fx_list_json,effect_json);
 			free(effect_json);
 		}
@@ -1460,8 +2242,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 		dbus_connection_flush(daemon->dbus);
 		free(fx_list_json);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.fx.lib", "load"))
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.fx.lib", "load"))
 	{
 		#ifdef USE_DEBUGGING
 			printf("\ndbus: method load fx.lib called for\n");
@@ -1489,8 +2270,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			daemon_kill(daemon,"dbus: Out Of Memory!\n");
 		dbus_connection_flush(daemon->dbus);
 	}
-
-    if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon", "quit"))
+    else if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon", "quit"))
 	{
 		#ifdef USE_DEBUGGING
 			printf("\ndbus: method quit daemon called for\n");
@@ -1502,7 +2282,6 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 			daemon_kill(daemon,"dbus: Out Of Memory!\n");
 		dbus_connection_flush(daemon->dbus);
 	}
-
 	/*
     if(dbus_message_is_method_call(msg, "org.voyagerproject.razer.daemon.fx.libs.", "list")) 
 	{
@@ -1572,8 +2351,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 		dbus_connection_flush(daemon->dbus);
 	}
 	*/
-
-    if(dbus_message_is_method_call(msg, "org.freedesktop.DBus.Introspectable", "Introspect")) 
+    else if(dbus_message_is_method_call(msg, "org.freedesktop.DBus.Introspectable", "Introspect")) 
 	{
 		#ifdef USE_DEBUGGING
 			printf("dbus: method Introspect called\n");
@@ -1599,6 +2377,84 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 					</arg>\n\
 				</method>\n\
 				<method name=\"continue\">\n\
+				</method>\n\
+				<method name=\"enable_macro_keys\">\n\
+				</method>\n\
+				<method name=\"raw_keyboard_brightness\">\n\
+					<arg direction=\"in\" name=\"brightness\" type=\"y\">\n\
+					</arg>\n\
+				</method>\n\
+		        <method name=\"set_game_mode\">\n\
+					<arg direction=\"in\" name=\"enable\" type=\"y\">\n\
+					</arg>\n\
+				</method>\n\
+				<method name=\"serial\">\n\
+					<arg direction=\"out\" name=\"serial_number\" type=\"s\">\n\
+					</arg>\n\
+				</method>\n\
+				<method name=\"device_name\">\n\
+					<arg direction=\"out\" name=\"device_name\" type=\"s\">\n\
+					</arg>\n\
+				</method>\n\
+			</interface>\n\
+			<interface name=\"org.voyagerproject.razer.daemon.driver_effect\">\n\
+				<method name=\"none\">\n\
+				</method>\n\
+				<method name=\"custom\">\n\
+				</method>\n\
+				<method name=\"spectrum\">\n\
+				</method>\n\
+				<method name=\"starlight\">\n\
+				</method>\n\
+				<method name=\"static\">\n\
+					<arg direction=\"in\" name=\"red\" type=\"y\">\n\
+					</arg>\n\
+					<arg direction=\"in\" name=\"green\" type=\"y\">\n\
+					</arg>\n\
+					<arg direction=\"in\" name=\"blue\" type=\"y\">\n\
+					</arg>\n\
+				</method>\n\
+				<method name=\"set_key_row\">\n\
+					<arg direction=\"in\" name=\"data\" type=\"ay\">\n\
+					</arg>\n\
+				</method>\n\
+				<method name=\"breath\">\n\
+				</method>\n\
+				<method name=\"breath\">\n\
+					<arg direction=\"in\" name=\"red\" type=\"y\">\n\
+					</arg>\n\
+					<arg direction=\"in\" name=\"green\" type=\"y\">\n\
+					</arg>\n\
+					<arg direction=\"in\" name=\"blue\" type=\"y\">\n\
+					</arg>\n\
+				</method>\n\
+				<method name=\"breath\">\n\
+					<arg direction=\"in\" name=\"red\" type=\"y\">\n\
+					</arg>\n\
+					<arg direction=\"in\" name=\"green\" type=\"y\">\n\
+					</arg>\n\
+					<arg direction=\"in\" name=\"blue\" type=\"y\">\n\
+					</arg>\n\
+				    <arg direction=\"in\" name=\"red2\" type=\"y\">\n\
+					</arg>\n\
+					<arg direction=\"in\" name=\"green2\" type=\"y\">\n\
+					</arg>\n\
+					<arg direction=\"in\" name=\"blue2\" type=\"y\">\n\
+					</arg>\n\
+				</method>\n\
+				<method name=\"reactive\">\n\
+				    <arg direction=\"in\" name=\"speed\" type=\"y\">\n\
+					</arg>\n\
+					<arg direction=\"in\" name=\"red\" type=\"y\">\n\
+					</arg>\n\
+					<arg direction=\"in\" name=\"green\" type=\"y\">\n\
+					</arg>\n\
+					<arg direction=\"in\" name=\"blue\" type=\"y\">\n\
+					</arg>\n\
+				</method>\n\
+				<method name=\"wave\">\n\
+					<arg direction=\"in\" name=\"direction\" type=\"y\">\n\
+					</arg>\n\
 				</method>\n\
 			</interface>\n\
 			<interface name=\"org.voyagerproject.razer.daemon.fps\">\n\
@@ -1626,16 +2482,20 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 					<arg direction=\"out\" name=\"render_nodes_list_json\" type=\"s\">\n\
 					</arg>\n\
 				</method>\n\
+			</interface>\n\
+			<interface name=\"org.voyagerproject.razer.daemon.device.render_nodes\">\n\
 				<method name=\"render_list\">\n\
 					<arg direction=\"out\" name=\"render_list_render_nodes_list_json\" type=\"s\">\n\
 					</arg>\n\
 				</method>\n\
-			</interface>\n\
-			<interface name=\"org.voyagerproject.razer.daemon.render_node\">\n\
+			</interface>\n"; //split done to remove warning
+			char *xml_data_end = "<interface name=\"org.voyagerproject.razer.daemon.device.default_render_node\">\n\
 				<method name=\"set\">\n\
 					<arg direction=\"in\" name=\"render_node_uid\" type=\"i\">\n\
 					</arg>\n\
 				</method>\n\
+			</interface>\n\
+			<interface name=\"org.voyagerproject.razer.daemon.render_node\">\n\
 				<method name=\"create\">\n\
 					<arg direction=\"in\" name=\"effect_uid\" type=\"i\">\n\
 					</arg>\n\
@@ -1662,8 +2522,8 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 					<arg direction=\"out\" name=\"parameter_value\" type=\"v\">\n\
 					</arg>\n\
 				</method>\n\
-			</interface>\n"; //split done to remove warning
-			char *xml_data_end = "<interface name=\"org.voyagerproject.razer.daemon.render_node.opacity\">\n\
+			</interface>\n\
+			<interface name=\"org.voyagerproject.razer.daemon.render_node.opacity\">\n\
 				<method name=\"set\">\n\
 					<arg direction=\"in\" name=\"opacity\" type=\"i\">\n\
 					</arg>\n\
@@ -1729,7 +2589,7 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 					</arg>\n\
 				</method>\n\
 			</interface>\n\
-			<interface name=\"org.voyagerproject.razer.daemon.frame_buffer\">\n\
+			<interface name=\"org.voyagerproject.razer.daemon.device.frame_buffer\">\n\
 				<method name=\"connect\">\n\
 					<arg direction=\"in\" name=\"render_node_uid\" type=\"i\">\n\
 					</arg>\n\
@@ -1738,6 +2598,16 @@ int daemon_dbus_handle_messages(struct razer_daemon *daemon)
 				</method>\n\
 				<method name=\"get\">\n\
 					<arg direction=\"out\" name=\"render_node_uid\" type=\"i\">\n\
+					</arg>\n\
+				</method>\n\
+			</interface>\n\
+			<interface name=\"org.voyagerproject.razer.daemon.devices\">\n\
+				<method name=\"get_number_of_devices\">\n\
+					<arg direction=\"out\" name=\"num_devices\" type=\"i\">\n\
+					</arg>\n\
+				</method>\n\
+				<method name=\"set_active\">\n\
+					<arg direction=\"in\" name=\"device_index\" type=\"i\">\n\
 					</arg>\n\
 				</method>\n\
 			</interface>\n\

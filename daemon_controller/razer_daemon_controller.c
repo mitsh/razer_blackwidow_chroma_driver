@@ -1,9 +1,30 @@
+/* 
+ * razer_chroma_drivers - a driver/tools collection for razer chroma devices
+ * (c) 2015 by Tim Theede aka Pez2001 <pez2001@voyagerproject.de> / vp
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA
+ *
+ * THIS SOFTWARE IS SUPPLIED AS IT IS WITHOUT ANY WARRANTY!
+ *
+ */
 #include "razer_daemon_controller.h"
 
 
 
 
-const char *dc_helpmsg = "Usage: %s [OPTIONS]... [COMMAND] [PARAMETERS]...\n\
+const char *dc_helpmsg_start = "Usage: %s [OPTIONS]... [COMMAND] [PARAMETERS]...\n\
 Send commands to razer_bcd daemon.\n\
 \n\
 Commands:\n\
@@ -12,8 +33,9 @@ Commands:\n\
   -p    Pause rendering\n\
   -C    Create rendering node\n\
            1. Parameter: Effect uid - sets effect render node uses\n\
-           2. Parameter: Name - sets the render nodes name\n\
-           3. Parameter: Description - sets the render nodes description\n\
+           2. Parameter: device uid - unique id of device to use\n\
+           3. Parameter: Name - sets the render nodes name\n\
+           4. Parameter: Description - sets the render nodes description\n\
 \n\
            For example: %s -C 1 \"My render node\" \"My description\"\n\
   -l    Load fx library\n\
@@ -35,6 +57,7 @@ Commands:\n\
   -X    Get render nodes list\n\
            Returns: render nodes list as json string\n\
   -R    Get rendering nodes list\n\
+           1. Parameter: device uid - unique id of device to query\n\
            Returns: rendering nodes list as json string\n\
   -U    Get sub nodes list\n\
            1. Parameter: render node uid - render node to get the sub nodes of\n\
@@ -51,7 +74,8 @@ Commands:\n\
            1. Parameter: render node uid - render node to set the time limit\n\
            2. Parameter: time limit value - time span in ms\n\
   -b    Connect frame buffer to render node\n\
-           1. Parameter: render node uid - render node that gets connected to the frame buffer\n\
+           1. Parameter: device uid - unique id of device to query\n\
+           2. Parameter: render node uid - render node that gets connected to the frame buffer\n\
   -s    Add Sub-node to render node\n\
            1. Parameter: render node uid - render node the sub node should be added to\n\
            2. Parameter: sub node uid - sub node that gets added\n\
@@ -60,8 +84,8 @@ Commands:\n\
            2. Parameter: input node uid - input node to connect\n\
   -n    Connect input node to render nodes second input slot\n\
            1. Parameter: render node uid - render node the input node should be connected to\n\
-           2. Parameter: input node uid - input node to connect\n\
-  -w    Get the next node of a render node\n\
+           2. Parameter: input node uid - input node to connect\n";
+  const char *dc_helpmsg_end = "  -w    Get the next node of a render node\n\
            1. Parameter: render node uid - render node to get the next node of\n\
            Returns: uid of next node\n\
   -y    Set the next node of a render node\n\
@@ -74,6 +98,8 @@ Commands:\n\
            1. Parameter: render node uid - render node to get the next node of\n\
            2. Parameter: move_linkage - 0/1 activate/deactivate moving of framebuffer\n\
                          linkage of a render node\n\
+  -A    Reset a render node\n\
+           1. Parameter: render node uid - render node to reset\n\
   -P    Get the parameter of a render node\n\
            1. Parameter: render node uid - render node the parameter belongs to\n\
            2. Parameter: parameter index - index of parameter to get\n\
@@ -83,8 +109,33 @@ Commands:\n\
            1. Parameter: render node uid - render node the parameter belongs to\n\
            2. Parameter: parameter index - index of parameter to set\n\
            3. Parameter: array index - if parameter is an array this index will be used (use -1 to skip)\n\
-           4. Parameter: parameter value - value to set\n\
+           4. Parameter: parameter type - type of value to be set (Int,Float,Rgb,String,etc)\n\
+           5. Parameter: parameter value - value to set\n\
   -d    Disconnect frame buffer\n\
+  -1    Spectrum Effect Mode\n\
+  -2    Wave Effect Mode\n\
+           1. Parameter: Direction, 0 = None, 1 = Right, 2 = Left\n\
+  -3    Reactive Mode\n\
+           1. Parameter: Speed (1-3)\n\
+           2. Parameter: Red (0-255)\n\
+           3. Parameter: Blue (0-255)\n\
+           4. Parameter: Green (0-255)\n\
+  -4    Breath Mode\n\
+           1. Parameter: Random 1\n\n\
+           1. Parameter: Red (0-255)\n\
+           2. Parameter: Blue (0-255)\n\
+           3. Parameter: Green (0-255)\n\
+           4. Optional Parameter: Red 2 (0-255)\n\
+           5. Optional Parameter: Blue 2 (0-255)\n\
+           6. Optional Parameter: Green 2 (0-255)\n\
+  -5    Static Mode\n\
+           1. Parameter: Red (0-255)\n\
+           2. Parameter: Blue (0-255)\n\
+           3. Parameter: Green (0-255)\n\
+  -6    None Mode\n\
+  -7    Set keyboard brightness\n\
+           1. Parameter: Brightness (0-255)\n\
+  -8    Enable Macro Keys\n\
   -h    Display this help and exit\n\
 \n\
 Options:\n\
@@ -93,6 +144,16 @@ Options:\n\
 	DBUS must be running on the system to communicate with daemon.\n\
 \n\
       Report bugs to <pez2001@voyagerproject.de>.\n";
+
+/* 1 spectrum mode
+ * 2 wave mode
+ * 3 reactive mode
+ * 4 breath mode
+ * 5 static mode
+ * 6 none mode
+ * 7 set brightness
+ * 8 enable macro keys
+ */
 
 int verbose = 0;
 
@@ -115,11 +176,93 @@ int main(int argc,char *argv[])
 	}
 	
 	int opts_given = 0;
-	while((c=getopt(argc,argv,"hvVcpqlfoigatOLxbdsrnwyCMGPSXRUF")) != -1)
+	while((c=getopt(argc,argv,"hvVcpqlfoigatOLxbdsrnwyCMGPSXRUF12345678A")) != -1)
 	{
 		opts_given = 1;
 		switch(c)
 		{
+			case '1':
+				{
+			    	// Spectrum Effect
+			    	dc_set_spectrum_mode(controller);
+				}
+				break;
+		  	case '2':
+		  		{
+			    	// Wave effect
+			    	unsigned char direction = atoi(argv[optind++]);
+				    dc_set_wave_mode(controller, direction);
+				}
+		  		break;
+			case '3':
+		  		{
+		    		// Reactive Mode
+		  			unsigned char speed = atoi(argv[optind++]);
+		    		unsigned char red = atoi(argv[optind++]);
+		    		unsigned char green = atoi(argv[optind++]);
+		    		unsigned char blue = atoi(argv[optind++]);
+				    dc_set_reactive_mode(controller, speed, red, green, blue);
+				}
+		  		break;
+		  	case '4':
+		  		{
+		    		// Breath Mode
+		    		unsigned char red = atoi(argv[optind++]);
+		    		if(optind < argc)
+		    		{
+		    			unsigned char green = atoi(argv[optind++]);
+		    			unsigned char blue = atoi(argv[optind++]);
+
+		    			if(optind < argc)
+		    			{
+		    				unsigned char red2 = atoi(argv[optind++]);
+		    				unsigned char green2 = atoi(argv[optind++]);
+		    				unsigned char blue2 = atoi(argv[optind++]);
+		    				dc_set_breath_mode(controller, 1, red, green, blue, red2, green2, blue2);
+		    			} else
+		    			{
+		    				dc_set_breath_mode(controller, 1, red, green, blue, 0, 0, 0);
+		    			}
+		    		} else
+		    		{
+		    			dc_set_breath_mode(controller, 3, 0, 0, 0, 0, 0, 0);
+		    		}
+		  		}
+		  		break;
+		  	case '5':
+		  		{
+		    		// Static Mode
+		    		unsigned char red = atoi(argv[optind++]);
+		    		unsigned char green = atoi(argv[optind++]);
+		    		unsigned char blue = atoi(argv[optind++]);
+				    dc_set_static_mode(controller, red, green, blue);
+		  		}
+		  		break;
+		  	case '6':
+		  		{	
+		    		// No effect mode
+		    		dc_set_none_mode(controller);
+				}
+		  		break;
+			case '7':
+		  		{
+		    		// Set brightness
+		    		unsigned char brightness = atoi(argv[optind++]);
+				    dc_set_keyboard_brightness(controller, brightness);
+				}
+		  		break;
+		  	case '8':
+		  		{
+		    		// Enable macro keys
+		    		dc_enable_macro_keys(controller);
+				}
+				break;
+		  	case 'A':
+		  		{
+					int render_node_uid = atoi(argv[optind++]);
+				    dc_render_node_reset(controller,render_node_uid);
+				}
+		  		break;
 			case 'P':
 				{
 					int render_node_uid = atoi(argv[optind++]);
@@ -137,6 +280,7 @@ int main(int argc,char *argv[])
 						printf("%s",parameter_json);
 					//free(parameter_json);
 				}
+				break;
 			case 'S':
 				{
 					int render_node_uid = atoi(argv[optind++]);
@@ -174,15 +318,16 @@ int main(int argc,char *argv[])
 			case 'C':
 				{
 					int fx_uid = atoi(argv[optind++]);
+					int device_uid = atoi(argv[optind++]);
 					char *node_name = argv[optind++];
 					char *node_description = argv[optind++];
 					if(verbose)
 					{
 						printf("sending create render node command to daemon.\n");
-						printf("new render node uid: %d.\n",dc_render_node_create(controller,fx_uid,node_name,node_description));
+						printf("new render node uid: %d.\n",dc_render_node_create(controller,fx_uid,device_uid,node_name,node_description));
 					}
 					else
-						printf("%d",dc_render_node_create(controller,fx_uid,node_name,node_description));
+						printf("%d",dc_render_node_create(controller,fx_uid,device_uid,node_name,node_description));
 
 				}
 				break;
@@ -236,17 +381,19 @@ int main(int argc,char *argv[])
 				break;
 			case 'b':
 				{
+					int device_uid = atoi(argv[optind++]);
 					int render_node_uid = atoi(argv[optind]);
 					if(verbose)
-						printf("sending connect frame buffer to render node: %d command to daemon.\n",render_node_uid);
-					dc_frame_buffer_connect(controller,render_node_uid);
+						printf("sending connect frame buffer %d to render node: %d command to daemon.\n",device_uid,render_node_uid);
+					dc_frame_buffer_connect(controller,device_uid,render_node_uid);
 				}
 				break;
 			case 'd':
 				{
+					int device_uid = atoi(argv[optind]);
 					if(verbose)
 						printf("sending disconnect frame buffer command to daemon.\n");
-					dc_frame_buffer_disconnect(controller);
+					dc_frame_buffer_disconnect(controller,device_uid);
 				}
 				break;
 			case 'x':
@@ -277,11 +424,12 @@ int main(int argc,char *argv[])
 				break;
 			case 'R':
 				{
-					char *list = dc_rendering_nodes_list(controller);
+					int device_uid = atoi(argv[optind]);
+					char *list = dc_rendering_nodes_list(controller,device_uid);
 					if(verbose)
 					{	
 						printf("sending get rendering nodes list command to daemon.\n");
-						printf("daemon rendering nodes list:\n%s.\n",list);
+						printf("daemon %d rendering nodes list:\n%s.\n",device_uid,list);
 					}
 					else
 						printf("%s",list);
@@ -338,13 +486,16 @@ int main(int argc,char *argv[])
 				}
 				break;
 			case 'a':
-				if(verbose)
 				{
-					printf("sending get framebuffer connected render node command to daemon.\n");
-					printf("daemon is running node:%d.\n",dc_frame_buffer_get(controller));
+					int device_uid = atoi(argv[optind]);
+					if(verbose)
+					{
+						printf("sending get framebuffer connected render node command to daemon.\n");
+						printf("daemon is running node:%d.\n",dc_frame_buffer_get(controller,device_uid));
+					}
+					else
+						printf("%d",dc_frame_buffer_get(controller,device_uid));
 				}
-				else
-					printf("%d",dc_frame_buffer_get(controller));
 				break;
 			case 'g':
 				if(verbose)
@@ -422,7 +573,8 @@ int main(int argc,char *argv[])
 				break;
 			case 'h':
 				printf("Razer blackwidow chroma daemon controller\n");
-				printf(dc_helpmsg,argv[0],argv[0]);
+				printf(dc_helpmsg_start,argv[0],argv[0]);
+				printf(dc_helpmsg_end,argv[0],argv[0]);
 				return(0);
 			case 'V':
 				printf("razer_bcd daemon controller %d.%d (build %d)\n",MAJOR_VERSION,MINOR_VERSION);
@@ -445,7 +597,8 @@ int main(int argc,char *argv[])
 	if(!opts_given)
 	{
 		printf("Razer blackwidow chroma daemon controller\n");
-		printf(dc_helpmsg,argv[0],argv[0]);
+		printf(dc_helpmsg_start,argv[0],argv[0]);
+		printf(dc_helpmsg_end,argv[0],argv[0]);
 	}		
 	#endif
 	return(0);
